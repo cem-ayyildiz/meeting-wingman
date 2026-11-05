@@ -1,0 +1,46 @@
+# Privacy policy
+
+Last updated: 2026-11-05
+
+meeting-wingman is open-source software that runs on your own computer inside Claude Code. The
+author does not operate any server for it, does not receive any of your data, and collects no
+analytics or telemetry.
+
+## What the plugin handles
+
+| Data | Where it goes | How long it is kept |
+|---|---|---|
+| Audio the computer plays during a meeting (the voices of you and the other participants) | Recorded by `ffmpeg` into 20-second WAV chunks on your computer. In remote mode, copied over SSH (`rsync`) to the host **you** configure in `WINGMAN_REMOTE_HOST`, nowhere else | Each chunk is deleted as soon as it is transcribed, usually within seconds. `wingman stop` deletes any chunk left over |
+| The transcript (and translation, with `-x`) | Written to a file on your computer, or on your remote host while the meeting runs | On the remote host it is deleted after `wingman stop` fetches it. Locally `wingman stop` moves it to the path you choose and keeps no other copy. You decide how long to keep that file |
+| Recognition hints (`-t` term list) | A small text file next to the transcriber | Deleted by `wingman stop` |
+| Transcript lines read by Claude | Your Claude Code session, which sends them to the model provider like any other text in the session | Under the provider's terms for your account |
+| Tasks and comments in team mode | The task tracker **you** have connected to Claude Code (for example ClickUp, Linear, Jira, GitHub, Asana), through that tracker's own MCP server or CLI, only when you confirm or turn on `auto` | Under that tracker's terms. The plugin never writes the full transcript into a tracker |
+
+## What the plugin downloads
+
+On first use, the speech model (faster-whisper) and, with `-x`, the translation model (NLLB-200)
+are downloaded from the Hugging Face Hub (`huggingface.co`) into your local Hugging Face cache.
+No meeting data is sent to Hugging Face; the request is an ordinary file download.
+
+## What the plugin does not do
+
+- It does not join meetings as a bot and does not use any meeting platform's API.
+- It does not send audio or text to any service the author runs, or to any service you have not
+  configured yourself.
+- It does not store conversation content to build profiles, and it does not read credentials
+  from your environment.
+
+## Other people's privacy
+
+The plugin transcribes other people. In many places you must tell them, or get their consent,
+before you do that. The skill reminds you at the start of every meeting; complying with the law
+and your organisation's policies is your responsibility.
+
+## Children
+
+meeting-wingman is not intended for people under 18.
+
+## Contact
+
+Questions about this policy: open an issue at
+https://github.com/cem-ayyildiz/meeting-wingman/issues. Security problems: see [SECURITY.md](SECURITY.md).

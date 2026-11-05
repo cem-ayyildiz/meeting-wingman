@@ -196,12 +196,18 @@ cmd_stop() {
   fi
   mkdir -p "$(dirname "$out")"
   if [ "$m" = local ]; then
-    cp "$LOCAL/transcript.txt" "$out"
     alive "$STATE/server.pid" && kill "$(cat "$STATE/server.pid")"
-    rm -f "$STATE/server.pid"
+    rm -f "$STATE/server.pid" "$SEG"/*.wav "$LOCAL/terms.txt"
+    # Hand the transcript over and keep no copy behind.
+    mv "$LOCAL/transcript.txt" "$out"
   else
-    ssh "$host" "cat $RDIR/transcript.txt" > "$out"
-    ssh "$host" "cd $RDIR && [ -f server.pid ] && kill \$(cat server.pid) 2>/dev/null; rm -f server.pid; [ -s transcript.txt ] && mv transcript.txt transcript-\$(date +%Y%m%d-%H%M%S).txt; true"
+    ssh "$host" "cd $RDIR && [ -f server.pid ] && kill \$(cat server.pid) 2>/dev/null; rm -f server.pid; true"
+    # Fetch, and delete the copy on the host only when the fetch worked.
+    if ssh "$host" "cat $RDIR/transcript.txt" > "$out"; then
+      ssh "$host" "cd $RDIR && rm -f transcript.txt terms.txt in/*.wav"
+    else
+      echo "WARNING: could not fetch the transcript; it is still on $host in $RDIR/transcript.txt" >&2
+    fi
   fi
   rm -f "$STATE/mode" "$STATE/host"
   local n; n=$(wc -l < "$out")

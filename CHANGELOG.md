@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.1] - 2026-11-05
+
+- `wingman stop` keeps no copy of the meeting behind: the local transcript is moved to the path you
+  give, and the copy on the remote host is deleted once it has been fetched. Leftover chunks and the
+  term list are removed too.
+- `bin/wingman` puts the command on the PATH inside Claude Code and marks the plugin as Claude Code only.
+- PRIVACY.md, SECURITY.md, plugin icon, example prompts, and a README section on everything the
+  plugin runs, sends and fetches.
+
 ## [0.2.0] - 2026-11-05
 
 - **Team mode**: action items and decisions heard in the meeting become new tasks or comments on

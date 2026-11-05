@@ -36,6 +36,20 @@ or *"Listen to our standup and put the action items into ClickUp."*
 
 ---
 
+## Examples
+
+Say it in your own words; these are the kinds of requests the skill is built for.
+
+1. *"I have an investor call on Zoom in 15 minutes. Read `notes/q3-numbers.md`, then listen and
+   help me answer their questions."* Claude reads the notes, starts the transcription, and from
+   then on answers every question with a short card.
+2. *"Listen to our weekly sync on Teams and put the action items into the Sprint 42 list in
+   ClickUp. Ask me before you create anything."* Claude loads the list, its members and open
+   tasks, and proposes each task or comment for a one-word "ok".
+3. *"This Meet call is in Japanese. Transcribe it and give me an English translation of every
+   line."* Claude starts with `-l ja -x en` and the English line appears under each Japanese one.
+4. *"The meeting is over. Save the transcript to `meetings/` and list what we promised to send."*
+
 ## Coach mode
 
 For meetings where you have to answer: clients, interviews, reviews, investors. Every new line of
@@ -151,8 +165,9 @@ cp -r meeting-wingman/skills/meeting-wingman ~/.claude/skills/
 `/plugin`, open **Marketplaces**, select **meeting-wingman** and turn on auto-update, or run
 `/plugin marketplace update meeting-wingman`.
 
-Other agents: the skill depends on Claude Code's Monitor tool to receive transcript lines while
-you talk, so for now it works in Claude Code only.
+**Claude Code only.** The plugin records audio and runs local programs, and it needs Claude
+Code's Monitor tool to receive transcript lines while you talk, so it does not work in claude.ai
+chat or Cowork. Inside Claude Code the plugin also puts a `wingman` command on the PATH.
 
 ## Requirements
 
@@ -231,6 +246,20 @@ State lives in `~/.local/state/meeting-wingman/`.
   original for meaning and numbers.
 - **It only hears the computer.** If you are in the room with the other person, this is the wrong tool.
 
+## What it runs, sends and fetches
+
+Everything the plugin does is in readable bash and Python in
+[`skills/meeting-wingman/scripts/`](skills/meeting-wingman/scripts/):
+
+| | |
+|---|---|
+| **Runs** | `ffmpeg` to record the system audio, `python3` with faster-whisper (and CTranslate2 for translation) to transcribe, `rsync` and `ssh` only in remote mode |
+| **Sends** | Audio chunks only to the SSH host you configure in `WINGMAN_REMOTE_HOST`, and only if you configure one. Tasks and comments only to the tracker you connected yourself, in team mode, with your confirmation unless you chose `auto`. Transcript lines are read by Claude Code like any other text in your session |
+| **Fetches** | The faster-whisper speech model and, with `-x`, the NLLB-200 translation model, from the Hugging Face Hub on first use |
+| **Keeps** | Audio chunks for a few seconds, until they are transcribed. The transcript only at the path you give `wingman stop`; no copy is left in the state folder or on the remote host |
+
+No analytics, no telemetry, no server run by the author. Details in [PRIVACY.md](PRIVACY.md).
+
 ## Consent and privacy
 
 This tool transcribes other people. In many places you must tell the other participants, or get
@@ -238,7 +267,8 @@ their consent, before you do that, and company policies may forbid it. The skill
 start; using it lawfully is your responsibility.
 
 Audio and transcripts stay on your machine or your own SSH host. Transcript lines are read by
-Claude Code, so they go to the model provider like everything else in your session.
+Claude Code, so they go to the model provider like everything else in your session. See
+[PRIVACY.md](PRIVACY.md) for the full policy and [SECURITY.md](SECURITY.md) to report a vulnerability.
 
 ## Troubleshooting
 

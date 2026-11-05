@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Puts `wingman` on the PATH inside Claude Code. The real script lives with the skill, so that a
+# copy of skills/meeting-wingman alone (without the plugin) still works.
+exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../skills/meeting-wingman/scripts/wingman" "$@"

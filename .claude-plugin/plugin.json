@@ -1,6 +1,7 @@
 {
   "name": "meeting-wingman",
-  "version": "0.2.0",
+  "displayName": "Meeting Wingman",
+  "version": "0.2.1",
   "description": "Live wingman for Meet, Teams and Zoom calls: transcribes (and translates) the meeting on GPU or CPU, suggests answers to questions, and turns action items into tasks and comments in your tracker.",
   "author": {
     "name": "Cem Ayyildiz",
@@ -9,6 +10,10 @@
   "homepage": "https://github.com/cem-ayyildiz/meeting-wingman",
   "repository": "https://github.com/cem-ayyildiz/meeting-wingman",
   "license": "MIT",
+  "icon": "./assets/icon.png",
+  "documentationUrl": "https://github.com/cem-ayyildiz/meeting-wingman#readme",
+  "supportUrl": "https://github.com/cem-ayyildiz/meeting-wingman/issues",
+  "privacyPolicyUrl": "https://github.com/cem-ayyildiz/meeting-wingman/blob/main/PRIVACY.md",
   "keywords": [
     "meeting",
     "google-meet",
