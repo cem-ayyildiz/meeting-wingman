@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.3.1] - 2026-11-05
+
+Fixes from the first real meetings (Meet and Teams team syncs, a Zoom test call).
+
+- Meet: URLs like `meet.google.com/meet/<code>` are recognised; the "Jump to bottom" button text is
+  no longer read as a caption.
+- Teams: reads the real caption structure of the new Teams web client and follows its virtual list
+  (one element reused for another caption); an interim caption and its punctuated final form give
+  one line, not two.
+- Zoom: the web client runs the meeting in an iframe; captions are read from there. The overlay is
+  fragmented, so the docs recommend the audio source for Zoom.
+- Captions without final punctuation get twice as long to settle, so slow speech is not cut inside
+  a word.
+- The reader asks Chrome not to throttle the meeting tab; during screen sharing lines arrived
+  minutes late.
+- `wingman switch [--meeting TEXT] [OUT.txt]`: save the current meeting and follow another tab on the
+  same browser connection, without a new "Allow remote debugging?" prompt.
+- "wingman" (as captions spell it: vingman, vincman, ringman, winkman...) wakes Claude in every mode.
+- Translation: no more repetition loops ("no, no, no, ...") on short lines.
+- Skill rules: never comment on a task that has an AI agent assigned; close duplicates instead of
+  deleting; moving between lists may need the UI; no status changes unless asked.
+- README: FAQ with measured token costs, captions vs audio, tracker writes; FreshSens uses it in
+  its internal meetings.
+
 ## [0.3.0] - 2026-11-05
 
 - **Captions source** (`wingman start --captions`): reads the live captions of a Google Meet,

@@ -23,6 +23,9 @@ appears in ClickUp (or Linear, Jira, GitHub, Asana) with her as owner. Someone m
 login is still blocked, and that becomes a comment on the existing task instead of a duplicate.
 You confirm each one with a word, or let it write on its own.
 
+We use it every day as a helper in our own internal meetings at FreshSens: standups, firmware and
+software syncs, sales updates.
+
 No bot joins the call. It either reads the meeting's own captions in your browser (with speaker
 names) or listens to your computer's audio and transcribes it, on a GPU when one is free and on
 the CPU otherwise. It can translate every line into your language as it goes, and it only wakes
@@ -132,8 +135,10 @@ Two sources, pick per meeting:
 Captions are best for team meetings, where it matters who said "I'll take it". Audio works
 everywhere, including the desktop apps. Nothing is installed in the meeting and no bot joins it.
 
-Google Meet captions are tested against the real page structure; the Teams and Zoom web readers
-are new and [need reports](https://github.com/cem-ayyildiz/meeting-wingman/issues) from real meetings.
+Tested in real meetings (November 2026): **Meet** and **Teams** web captions work well with speaker
+names. **Zoom**'s caption overlay arrives in fragments and without names, so for Zoom use the audio
+source (`--app chrome` for the web client, `--app zoom` for the desktop app) or turn on Zoom's full
+transcript. Platforms change their pages; please [report](https://github.com/cem-ayyildiz/meeting-wingman/issues) what breaks.
 If a platform changes its page, `WINGMAN_CAPTION_BLOCK`, `WINGMAN_CAPTION_SPEAKER` and
 `WINGMAN_CAPTION_TEXT` take CSS selectors without waiting for a release.
 
@@ -285,6 +290,7 @@ wingman start -l ja -x en                               # Japanese call, English
 wingman watch                                           # events for Claude (--raw: every line)
 wingman show 60                                         # the last 60 lines
 wingman level                                           # system audio and microphone levels
+wingman switch --meeting "Weekly sync" notes/standup.txt  # captions: save this one, follow another tab
 wingman stop notes/client-call-transcript.txt           # stop and save, keep no other copy
 wingman status
 ```
@@ -315,6 +321,57 @@ Everything the plugin does is in readable bash and Python in
 | **Keeps** | Audio chunks for a few seconds, until they are transcribed. The transcript only at the path you give `wingman stop`; no copy is left in the state folder or on the remote host |
 
 No analytics, no telemetry, no server run by the author. Details in [PRIVACY.md](PRIVACY.md).
+
+## FAQ
+
+<details>
+<summary><strong>How many tokens does a meeting cost?</strong></summary>
+
+Each event from `wingman watch` is one Claude turn, and every turn re-reads the session's context
+(mostly from the prompt cache). So the cost is roughly **number of events × size of the session**,
+plus a little output.
+
+Measured on our own meetings (Claude Code, prompt caching on):
+
+| Meeting | Claude turns | Cache reads | Output |
+|---|---|---|---|
+| 19-minute team sync, filtered events plus ClickUp and Slack work | 115 | 60 M tokens | 44 K tokens |
+| 11-minute software sync | 52 | 30 M tokens | 31 K tokens |
+
+Those runs happened inside a long development session of about 500 K tokens, which every turn
+re-read. In a fresh session the context is around 30–50 K tokens, so the same meeting reads about
+a tenth of that. To keep it low:
+
+- **Start the meeting in a new Claude Code session**, not at the end of a long one.
+- Keep the filtered `wingman watch` (not `--raw`): it sends a few events per minute instead of one per sentence.
+- Raise `WINGMAN_DIGEST` (seconds between digests of quiet lines) for long meetings.
+- Pick a smaller model for the meeting session if the answers are good enough for you.
+
+`/cost` or your usage page shows what a meeting actually used. Transcription and translation run
+locally and cost no tokens.
+</details>
+
+<details>
+<summary><strong>Captions or audio?</strong></summary>
+
+Captions when the meeting is in the browser and you want speaker names (team meetings): no GPU,
+no audio recorded. Audio for desktop apps, for Zoom, and for languages the platform does not caption.
+</details>
+
+<details>
+<summary><strong>Does it write to our tracker on its own?</strong></summary>
+
+Only in team mode, and by default it asks first (`confirm`). It comments on an existing task
+instead of creating a duplicate, never posts the transcript, does not change statuses unless asked,
+and does not touch tasks that have an AI agent assigned (a comment there could start an agent run).
+</details>
+
+<details>
+<summary><strong>Does a bot join the call?</strong></summary>
+
+No. It only reads what your browser shows or what your computer plays. The other participants see
+nothing, which is why the skill reminds you to tell them.
+</details>
 
 ## Consent and privacy
 

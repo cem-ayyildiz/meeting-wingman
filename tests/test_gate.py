@@ -38,6 +38,13 @@ class Classify(unittest.TestCase):
         self.assertEqual(self.hits("Can you send it by Friday?", "coach"), ["question"])
         self.assertNotIn("question", self.hits("Can you send it by Friday?", "team"))
 
+    def test_wake_word_in_every_mode(self):
+        for t in ["Vincman, daha fazla test gerekiyor mu?", "Bir saniye vingman", "Ringman yapmamış abi",
+                  "Just a quick note for wingman", "Regmen, sordum"]:
+            for mode in ("coach", "team", "both"):
+                self.assertIn("wingman", self.hits(t, mode), (t, mode))
+        self.assertNotIn("wingman", self.hits("The van is coming", "team"))
+
     def test_self_questions_do_not_wake(self):
         self.assertEqual(classify("What happens offline?", (), "coach", "You", True), [])
         self.assertEqual(classify("We saved 30% on energy.", (), "coach", "You", True), ["number"])

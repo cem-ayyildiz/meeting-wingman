@@ -72,10 +72,19 @@ happen while it runs. Map what the user says to a target:
 | "the Meet", a meeting title or code, and the meeting is in the browser | `--captions` (add `--meeting "<title or code>"` if several are open) |
 | nothing specific, one meeting running | audio from everything (default), or captions if a meeting tab is open |
 | unclear, or several meetings | run `wingman meetings` and ask which one, naming what it lists |
-| "switch to the other call" | `wingman stop <file for this one>`, then `wingman start` with the new target |
+| "switch to the other call" | captions: `wingman switch --meeting "<title or code>" <file for this one>` (same browser connection, no new approval); audio: `wingman stop <file>`, then `wingman start` with the new target |
 
 `--app` needs PipeWire (most current Linux desktops); `wingman meetings` shows the app names that
 are playing audio. Captions need the meeting in the browser with captions turned on.
+
+Per platform, from real meetings: **Meet** and **Teams** (web) captions work well and give speaker
+names; on Teams the user's own lines carry their full name, not "You", so pass it with `-n`.
+**Zoom**'s caption overlay comes in fragments and without names: for Zoom prefer the audio source
+(`--app chrome` or `--app zoom`), or ask the host to turn on Zoom's full transcript.
+
+**Cost:** every event is one Claude turn that re-reads the whole session. Suggest starting the
+meeting in a fresh session (not in a long working session), keep the filtered `wingman watch`, and
+for long meetings a larger `WINGMAN_DIGEST`.
 
 ### Start
 
@@ -104,6 +113,9 @@ decisions, blockers, dates, the user's name) or `both`.
   - `◇ digest 14:00:10–14:05:02 · 12 lines, no trigger`: the meeting moved on with nothing for
     you. Read it for context and reply with at most one short line (or "—"); speak up only if
     something in it needs the user (a wrong number, a missed commitment).
+  - `▶ wingman · …`: someone in the meeting is talking to you ("wingman, add a comment", spelled
+    vingman / vincman / ringman by the captions). Do what is asked, within the rules below, and
+    answer in one line; the user may read it out.
   - Need more context? `wingman show 60` prints the last 60 lines.
 - **Check**: ask the user to say a test sentence (audio) or to check that captions are on
   (captions). If nothing arrives, run `wingman level` (audio): around −60 dB means silence, the
@@ -185,6 +197,15 @@ Other Monitor events get "No action item." or nothing at all if the user asked f
 - **Speed over polish.** In `confirm` mode, propose as soon as an item is clear; the user
   answers in a word while the meeting goes on.
 - After every write, reply with the link in one line.
+- **Agents on tasks.** Before commenting on or changing a task, check its assignees. If an AI agent
+  is assigned (for example "Agent Multica"), a new comment or status change can start an agent run:
+  do not write there; say so and offer to remove the agent first (with the user's or task owner's
+  go-ahead), or to write elsewhere.
+- **Close, don't delete.** Asked to remove a duplicate, close it (or mark it done) instead of
+  deleting; deleting through the API is permanent.
+- **Moving between lists** (backlog to sprint) is often not possible through the API; if it fails,
+  say so and ask the owner to drag it in the UI.
+- Never change a task's status unless asked; reassigning, closing and moving are separate requests.
 
 ## 4. Both modes
 
@@ -223,6 +244,8 @@ Ask where to save it if the project has no obvious place.
 | First run on a machine | `wingman doctor`: ffmpeg, faster-whisper, GPU, audio levels, microphone, SSH host, browser debugging |
 | `--captions` fails to connect | Remote debugging is off (`chrome://inspect/#remote-debugging`), or the user did not click Allow. Each `wingman start --captions` asks once |
 | `--app` records nothing | The app has not played sound yet, or its name differs: `wingman meetings` lists the names; the match is a case-insensitive regex |
+| `--captions` lines arrive minutes late while screen sharing | The reader asks Chrome not to throttle the tab; if it still happens, keep the meeting window visible |
+| Zoom captions arrive in fragments | Zoom's overlay rolls word groups; use the audio source for Zoom |
 | `--captions` reads the wrong meeting | Several meeting tabs are open: `--meeting "<title or code>"` |
 | `--captions` says no captions on the page | Captions (CC) are off in the meeting, or the meeting runs in the desktop app; use the audio source instead |
 | A Bluetooth headset sounds worse after start | Opening its microphone switches it to headset mode. In a call the app already does this; otherwise use `--no-mic` |

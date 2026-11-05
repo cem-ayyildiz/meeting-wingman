@@ -9,7 +9,7 @@ so Claude keeps up with the meeting without a reply for every sentence.
     tail -F transcript.txt | gate.py --mode coach|team|both [--names "Ana, Ana Silva"] [--digest 300]
     gate.py --raw          # pass every line through, no filtering
 
-Triggers by mode:
+Triggers by mode (all modes also wake on "wingman", however the captions spell it):
   coach   question, name, number      (what the user may have to answer or correct)
   team    action, decision, blocker, name, date
   both    all of the above
@@ -78,11 +78,13 @@ BLOCKER = rx(
     r"\b(?:blocked|blocker|blocking|stuck|waiting on|waiting for|issue|bug|broken|delay(?:ed)?|risk)\b",
     W + r"(?:bloklu|takildi|takili|bekliyoruz|sorun|problem|hata|gecik\w*|risk)" + E,
 )
+# The assistant itself, as captions spell it ("wingman", "vingman", "vincman", "ringman", "winkman"...).
+WAKE = re.compile(r"\b(?:w|v|r)(?:i|e)n(?:g|k|c)?(?:h)?\s?m(?:a|e)n\b|\bregmen\b|\bmeeting[- ]?wingman\b")
 NUMBER = re.compile(r"\d+(?:[.,]\d+)?\s*(?:%|percent|yuzde|€|\$|£|tl|lira|euro|eur|dolar|dollars?|usd|million|milyon|milyar|billion|bin|thousand|k\b|m\b)|\b\d{2,}\b|yuzde\s*\d")
 
 MODES = {
-    "coach": ("question", "name", "number"),
-    "team": ("action", "decision", "blocker", "date", "name"),
+    "coach": ("wingman", "question", "name", "number"),
+    "team": ("wingman", "action", "decision", "blocker", "date", "name"),
 }
 MODES["both"] = tuple(dict.fromkeys(MODES["coach"] + MODES["team"]))
 
@@ -113,6 +115,7 @@ def classify(text, names=(), mode="both", speaker="", is_self=False):
         "blocker": lambda: BLOCKER.search(t),
         "date": lambda: DATE.search(t),
         "number": lambda: NUMBER.search(t),
+        "wingman": lambda: WAKE.search(t),
         "name": lambda: any(re.search(r"\b%s\b" % re.escape(n), t) for n in names),
     }
     skip = {"question", "name"} if is_self else set()

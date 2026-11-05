@@ -26,7 +26,7 @@ class TrackerTest(unittest.TestCase):
         self.assertEqual(self.step(b("Good morning")), [])
         self.assertEqual(self.step(b("Good morning all")), [])
         out = []
-        for _ in range(5):
+        for _ in range(7):      # no punctuation: taken after 2 x stable
             out += self.step(b("Good morning all"))
         self.assertEqual(out, [("Ana", "Good morning all")])
 
@@ -48,9 +48,62 @@ class TrackerTest(unittest.TestCase):
     def test_correction_before_emit(self):
         self.step([{"id": "1", "speaker": "Ana", "text": "let's starts"}])
         out = []
-        for _ in range(5):
+        for _ in range(7):
             out += self.step([{"id": "1", "speaker": "Ana", "text": "let's start"}])
         self.assertEqual(out, [("Ana", "let's start")])
+
+
+class ReusedNode(unittest.TestCase):
+    def test_virtual_list_reuses_an_element(self):
+        now = [0.0]
+        t = Tracker(clock=lambda: now[0])
+        def step(b):
+            out = t.update(b)
+            now[0] += 0.5
+            return [(s, x) for _, s, x in out]
+        self.assertEqual(step([{"id": "1", "speaker": "Ben", "text": "Last time the participants"}]), [])
+        self.assertEqual(step([{"id": "1", "speaker": "Cem", "text": "OK, let's go on"}]),
+                         [("Ben", "Last time the participants")])
+        out = []
+        for _ in range(7):
+            out += step([{"id": "1", "speaker": "Cem", "text": "OK, let's go on"}])
+        self.assertEqual(out, [("Cem", "OK, let's go on")])
+
+
+class FieldFixes(unittest.TestCase):
+    """Behaviour found in real meetings on 5 Nov 2026."""
+
+    def setUp(self):
+        self.now = [0.0]
+        self.t = Tracker(stable=1.5, clock=lambda: self.now[0])
+
+    def step(self, blocks, dt=0.5):
+        out = self.t.update(blocks)
+        self.now[0] += dt
+        return [(s, x) for _, s, x in out]
+
+    def test_slow_speech_is_not_split_inside_a_word(self):
+        out = []
+        for _ in range(4):      # 2 s without change, no punctuation: still waiting
+            out += self.step([{"id": "1", "speaker": "Ana", "text": "Do we need the twelve vo"}])
+        self.assertEqual(out, [])
+        for _ in range(4):
+            out += self.step([{"id": "1", "speaker": "Ana", "text": "Do we need the twelve volt or the five volt one?"}])
+        self.assertEqual(out, [("Ana", "Do we need the twelve volt or the five volt one?")])
+
+    def test_interim_then_final_caption_is_one_line(self):
+        out = self.step([{"id": "1", "speaker": "Ben", "text": "OK let me speak now"}])
+        out += self.step([{"id": "1", "speaker": "Ben", "text": "OK let me speak now"},
+                          {"id": "2", "speaker": "Ben", "text": "OK, let me speak now."}])
+        for _ in range(5):
+            out += self.step([{"id": "2", "speaker": "Ben", "text": "OK, let me speak now."}])
+        self.assertEqual(out, [("Ben", "OK let me speak now")])
+
+    def test_interface_text_is_dropped(self):
+        out = []
+        for _ in range(8):
+            out += self.step([{"id": "9", "speaker": "", "text": "arrow_downwardJump to bottom"}])
+        self.assertEqual(out, [])
 
 
 def chrome():

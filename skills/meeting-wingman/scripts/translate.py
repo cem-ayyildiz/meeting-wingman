@@ -81,7 +81,10 @@ class Translator:
         if not text or not src or src == self.tgt:
             return None
         toks = [src] + self.tok.encode(text, add_special_tokens=False).tokens + ["</s>"]
+        # A short line can send NLLB into a loop ("no, no, no, ..."): cap the output relative to
+        # the input and penalise repeats.
         res = self.model.translate_batch([toks], target_prefix=[[self.tgt]], beam_size=2,
-                                         max_decoding_length=256)
+                                         max_decoding_length=min(256, 2 * len(toks) + 16),
+                                         repetition_penalty=1.2, no_repeat_ngram_size=4)
         out = [t for t in res[0].hypotheses[0] if t != self.tgt]
         return self.tok.decode([self.tok.token_to_id(t) for t in out]).strip()

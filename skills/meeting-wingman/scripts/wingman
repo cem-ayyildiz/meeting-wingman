@@ -7,6 +7,8 @@
 #   wingman watch [N] [--raw]  print events for Claude: triggers at once, quiet lines as a digest
 #                              every few minutes (--raw: every line). N = old lines to replay first
 #   wingman show [N]           print the last N transcript lines (default 30)
+#   wingman switch [--meeting TEXT] [OUT.txt]   captions: save this meeting to OUT.txt and follow
+#                              another tab on the same browser connection (no new approval)
 #   wingman stop [OUT.txt]     stop, save the transcript to OUT.txt, keep no other copy
 #   wingman meetings           list what can be followed now: apps playing audio, meeting tabs
 #   wingman doctor             check the setup and say what is missing
@@ -143,7 +145,8 @@ start_captions() {   # $1 lang, $2 xlang, $3 cdp, $4 meeting
   mkdir -p "$LOCAL"
   [ -s "$LOCAL/transcript.txt" ] && mv "$LOCAL/transcript.txt" "$LOCAL/transcript-$(date +%Y%m%d-%H%M%S).txt"
   : > "$LOCAL/transcript.txt"
-  WINGMAN_LANG="$1" "${DETACH[@]}" "$LPY" "$DIR/captions.py" "$LOCAL/transcript.txt" --cdp "$3" \
+  rm -f "$STATE/control.json"
+  WINGMAN_LANG="$1" WINGMAN_CONTROL="$STATE/control.json" "${DETACH[@]}" "$LPY" "$DIR/captions.py" "$LOCAL/transcript.txt" --cdp "$3" \
     ${2:+--translate "$2"} ${4:+--meeting "$4"} > "$LOCAL/server.log" 2>&1 < /dev/null &
   echo $! > "$STATE/server.pid"
   echo "Connecting to the browser ($3). If it asks \"Allow remote debugging?\", approve it."
@@ -284,6 +287,29 @@ cmd_watch() {
     local sp=(); [ "$(mode)" = captions ] && sp=(--speakers)
     transcript_stream "$n" | "$LPY" -u "$DIR/gate.py" --mode "${gmode:-both}" --names "$names" --digest "${WINGMAN_DIGEST:-300}" "${sp[@]}"
   fi
+}
+
+cmd_switch() {   # captions only: rotate the transcript and/or follow another meeting tab
+  local meeting="" out="" before
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --meeting) meeting="$2"; shift 2 ;;
+      *) out="$1"; shift ;;
+    esac
+  done
+  [ "$(mode)" = captions ] || die "switch works with --captions. For audio: wingman stop <out.txt>, then wingman start ... (a few seconds)"
+  [ -n "$out" ] && { mkdir -p "$(dirname "$out")"; out="$(cd "$(dirname "$out")" && pwd)/$(basename "$out")"; }
+  before=$(wc -l < "$LOCAL/server.log")
+  "$LPY" -c 'import json,sys; json.dump({k: v for k, v in (("rotate", sys.argv[1]), ("meeting", sys.argv[2])) if v}, open(sys.argv[3], "w"))' \
+    "$out" "$meeting" "$STATE/control.json"
+  for _ in $(seq 1 30); do
+    if tail -n +"$((before + 1))" "$LOCAL/server.log" | grep -qE "switched to|switch: no meeting"; then
+      tail -n +"$((before + 1))" "$LOCAL/server.log" | grep -E "saved transcript|switched to|switch: no meeting"
+      return 0
+    fi
+    sleep 0.5
+  done
+  die "the caption reader did not answer (is it running? wingman status)"
 }
 
 cmd_show() {
@@ -439,6 +465,7 @@ case "${1:-help}" in
   start) shift; cmd_start "$@" ;;
   watch) shift; cmd_watch "$@" ;;
   show) shift; cmd_show "$@" ;;
+  switch) shift; cmd_switch "$@" ;;
   stop) shift; cmd_stop "$@" ;;
   doctor) cmd_doctor ;;
   meetings) shift; cmd_meetings "$@" ;;

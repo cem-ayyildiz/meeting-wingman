@@ -28,7 +28,8 @@ import time
 import cdp
 
 PLATFORMS = {
-    "meet": re.compile(r"^https://meet\.google\.com/[a-z]{3,4}-[a-z]{3,4}-[a-z]{3,4}"),
+    # meet.google.com/abc-defg-hij, also with a path before the code (/meet/abc-defg-hij, /_meet/...)
+    "meet": re.compile(r"^https://meet\.google\.com/(?:[\w-]+/)*[a-z]{3,4}-[a-z]{3,4}-[a-z]{3,4}(?:[/?#]|$)"),
     "teams": re.compile(r"^https://(?:teams\.microsoft\.com|teams\.live\.com|teams\.cloud\.microsoft)/"),
     "zoom": re.compile(r"^https://(?:[\w-]+\.)?zoom\.us/wc/|^https://app\.zoom\.us/wc/"),
 }
@@ -41,12 +42,16 @@ EXTRACT = r"""
   let n = window.__wmN || 0;
   const id = el => el.dataset.wmId || (el.dataset.wmId = String(window.__wmN = ++n));
   const txt = el => (el && (el.innerText || el.textContent) || "").replace(/\s+/g, " ").trim();
+  // Meetings can run inside same-origin iframes (the Zoom web client does): search those too.
+  const D = [document, ...[...document.querySelectorAll("iframe")].map(f => { try { return f.contentDocument; } catch (e) { return null; } }).filter(Boolean)];
+  const qa = s => D.flatMap(d => [...d.querySelectorAll(s)]);
+  const q1 = s => { for (const d of D) { const e = d.querySelector(s); if (e) return e; } return null; };
   const out = [];
   const add = (el, speaker, text) => { if (text) out.push({id: id(el), speaker: speaker || "", text}); };
   if (C.block) {
-    document.querySelectorAll(C.block).forEach(b => add(b,
+    qa(C.block).forEach(b => add(b,
       C.speaker ? txt(b.querySelector(C.speaker)) : "", C.text ? txt(b.querySelector(C.text)) : txt(b)));
-    return {found: out.length > 0 || !!document.querySelector(C.block), blocks: out};
+    return {found: out.length > 0 || !!q1(C.block), blocks: out};
   }
   if (P === "meet") {
     // The captions panel is a region whose label says "Captions" in the UI language.
@@ -74,43 +79,61 @@ EXTRACT = r"""
     return {found: true, blocks: out};
   }
   if (P === "teams") {
-    const items = document.querySelectorAll('[data-tid="closed-caption-message"], [data-tid="closed-captions-renderer"] [data-tid="closed-caption-text"]');
-    if (!items.length) return {found: !!document.querySelector('[data-tid="closed-captions-renderer"], [data-tid="closed-caption-v2-window-wrapper"]'), blocks: []};
+    // New Teams (checked on teams.live.com, Nov 2026): one .fui-ChatMessageCompact per caption,
+    // holding [data-tid=author] and [data-tid=closed-caption-text], inside a virtual list.
+    const texts = document.querySelectorAll('[data-tid="closed-caption-text"]');
+    const panel = document.querySelector('[data-tid="closed-caption-v2-window-wrapper"], [data-tid="closed-caption-renderer-wrapper"], [data-tid="closed-captions-v2-items-renderer"]');
+    if (!texts.length) return {found: !!panel, blocks: []};
     const seen = new Set();
-    for (const it of items) {
-      const b = it.closest('[data-tid="closed-caption-message"]') || it.closest('.fui-ChatMessageCompact') || it.parentElement;
+    for (const t of texts) {
+      const b = t.closest('.fui-ChatMessageCompact') || t.closest('[data-tid="closed-caption-message"]') || t.parentElement;
       if (seen.has(b)) continue; seen.add(b);
-      add(b, txt(b.querySelector('[data-tid="author"]')), txt(b.querySelector('[data-tid="closed-caption-text"]')) || txt(b));
+      add(b, txt(b.querySelector('[data-tid="author"]')), txt(t));
     }
     return {found: true, blocks: out};
   }
   if (P === "zoom") {
     // Prefer the full transcript panel (it has names); fall back to the subtitle overlay.
-    const panel = document.querySelectorAll(".lt-full-transcript__item");
+    const panel = qa(".lt-full-transcript__item");
     if (panel.length) {
       panel.forEach(b => add(b, txt(b.querySelector(".lt-full-transcript__display-name")),
                                 txt(b.querySelector(".lt-full-transcript__message")) || txt(b)));
       return {found: true, blocks: out};
     }
-    const subs = document.querySelectorAll(".live-transcription-subtitle__item");
+    // Checked on app.zoom.us/wc (Nov 2026): the subtitle overlay holds plain spans, no names.
+    const subs = qa(".live-transcription-subtitle__item");
     subs.forEach(b => add(b, "", txt(b)));
-    return {found: subs.length > 0 || !!document.querySelector("#live-transcription-subtitle"), blocks: out};
+    return {found: subs.length > 0 || !!q1(".live-transcription-subtitle__box, .lt-subtitle-wrap, #live-transcription-subtitle"), blocks: out};
   }
   return {found: false, blocks: []};
 })()
 """
 
 
+def fold(text):
+    """Compare captions without case and punctuation: platforms re-punctuate a caption when it settles."""
+    return re.sub(r"[\W_]+", "", text.casefold())
+
+
+# Interface text that sits inside caption areas (Meet's "Jump to bottom" button, icon ligatures).
+UI_NOISE = re.compile(r"^(?:arrow_\w+|keyboard_arrow_\w+|expand_\w+)?\s*"
+                      r"(?:jump to bottom|scroll to bottom|en alta (?:git|in|atla)|nach unten springen|"
+                      r"aller en bas|ir al final)?\s*$", re.I)
+
+
 class Tracker:
     """Turns caption blocks that grow and get rewritten in place into finished lines.
 
-    A block's new text is emitted when it has not changed for `stable` seconds, when a newer block
-    appears after it, when it disappears, or in sentence-sized pieces when it runs long."""
+    A block's new text is emitted when a newer block appears after it, when it disappears, when it
+    has not changed for `stable` seconds (twice that when it does not end in punctuation, so a slow
+    speaker's word is not split), or in sentence-sized pieces when it runs long. A line that repeats one just
+    emitted (an interim caption followed by its punctuated final form) is dropped."""
 
     def __init__(self, stable=1.5, long=220, clock=time.time):
         self.stable, self.long, self.clock = stable, long, clock
         self.blocks = {}     # id -> {speaker, text, changed, done, first}
         self.order = []
+        self.recent = []     # (speaker, folded text) of the last lines emitted
 
     def update(self, blocks):
         now, out = self.clock(), []
@@ -120,6 +143,17 @@ class Tracker:
             if s is None:
                 s = self.blocks[b["id"]] = {"speaker": b["speaker"], "text": "", "changed": now, "done": 0, "first": now}
                 self.order.append(b["id"])
+            # Platforms correct the last words of a caption in place; a different caption in the
+            # same element (a virtual list reusing it) shares little or nothing with the old text.
+            old, new = fold(s["text"]), fold(b["text"])
+            common = len(os.path.commonprefix([old, new]))
+            reused = bool(old) and (
+                (b["speaker"] and s["speaker"] and b["speaker"] != s["speaker"]) or
+                common < len(old) / 2)
+            if reused:
+                if len(s["text"]) > s["done"] and s["text"][s["done"]:].strip():
+                    out.append(self.take(s, len(s["text"])))
+                s.update(speaker=b["speaker"], text="", done=0, first=now, changed=now)
             if b["text"] != s["text"]:
                 if s["done"] >= len(s["text"]):      # nothing pending yet: the new text starts now
                     s["first"] = now
@@ -132,7 +166,12 @@ class Tracker:
                 continue
             gone = bid not in ids
             newer = any(o in ids for o in self.order[i + 1:])
-            if gone or newer or now - s["changed"] >= self.stable:
+            quiet = now - s["changed"]
+            if gone or newer:
+                out.append(self.take(s, len(s["text"])))
+            elif quiet >= self.stable and (re.search(r"[.?!…。？！]\s*$", s["text"]) or quiet >= 2 * self.stable):
+                # A caption that ends without punctuation may be a slow speaker mid-word: give it
+                # twice as long before taking it.
                 out.append(self.take(s, len(s["text"])))
             elif len(pending) >= self.long:
                 cut = max(s["text"].rfind(p, s["done"]) for p in (". ", "? ", "! "))
@@ -142,13 +181,22 @@ class Tracker:
         for bid in [b for b in self.order if b not in ids and self.blocks[b]["done"] >= len(self.blocks[b]["text"])]:
             self.order.remove(bid)
             del self.blocks[bid]
-        return out
+        return [o for o in out if o]
+
+    def flush(self):
+        """Emit everything still pending (before switching meetings or stopping)."""
+        out = [self.take(s, len(s["text"])) for s in self.blocks.values() if s["text"][s["done"]:].strip()]
+        return [o for o in out if o]
 
     def take(self, s, end):
         text = s["text"][s["done"]:end].strip()
         s["done"] = end
         stamp = time.strftime("%H:%M:%S", time.localtime(s["first"]))
         s["first"] = self.clock()
+        key = (s["speaker"], fold(text))
+        if not key[1] or UI_NOISE.match(text) or key in self.recent:
+            return None
+        self.recent = (self.recent + [key])[-30:]
         return stamp, s["speaker"], text
 
 
@@ -184,6 +232,34 @@ def find_tab(browser, platform, meeting=""):
         except (RuntimeError, ConnectionError):
             pass
     return tabs[0]
+
+
+def attach(browser, tab):
+    """Attach to the tab and ask Chrome not to throttle it while it is in the background
+    (screen sharing, another window in front): otherwise captions arrive minutes late."""
+    session = browser.attach(tab["targetId"])
+    for method, params in (("Emulation.setFocusEmulationEnabled", {"enabled": True}),
+                           ("Page.setWebLifecycleState", {"state": "active"})):
+        try:
+            browser.call(method, params, session)
+        except (RuntimeError, ConnectionError):
+            pass
+    return session
+
+
+def write_lines(path, lines, translate):
+    if not lines:
+        return
+    with open(path, "a", encoding="utf-8") as f:
+        for stamp, speaker, text in lines:
+            f.write(f"[{stamp}] {speaker + ': ' if speaker else ''}{text}\n")
+            if translate:
+                try:
+                    t = translate(text, os.environ.get("WINGMAN_LANG") or "en")
+                    if t:
+                        f.write(f"[{stamp}] ↳ {translate.target}: {t}\n")
+                except Exception as e:
+                    print(f"translation failed: {e}", flush=True)
 
 
 def main():
@@ -223,14 +299,37 @@ def main():
     others = [t for _, t in meeting_tabs(browser, a.platform) if t["targetId"] != tab["targetId"]]
     if others:
         print("other meeting tabs (not read): " + "; ".join(t.get("title", "")[:40] for t in others), flush=True)
-    session = browser.attach(tab["targetId"])
+    session = attach(browser, tab)
     custom = {k: os.environ.get(f"WINGMAN_CAPTION_{k.upper()}", "") for k in ("block", "speaker", "text")}
     expr = EXTRACT % {"platform": json.dumps(platform), "custom": json.dumps(custom)}
     print(f"captions ready ({platform}: {tab.get('title', '')[:60]}"
           + (f", translate to {translate.target} on {translate.device}" if translate else "") + ")", flush=True)
 
     tracker, found_before = Tracker(), None
+    control = os.environ.get("WINGMAN_CONTROL", "")
     while True:
+        # `wingman switch`: save this meeting's transcript and follow another tab, on the same
+        # browser connection (no new "Allow remote debugging?" prompt).
+        if control and os.path.exists(control):
+            try:
+                req = json.load(open(control))
+            except ValueError:
+                req = {}
+            os.remove(control)
+            write_lines(a.out, tracker.flush(), translate)
+            if req.get("rotate"):
+                os.replace(a.out, req["rotate"])
+                open(a.out, "w").close()
+                print(f"saved transcript to {req['rotate']}", flush=True)
+            a.meeting = req.get("meeting", a.meeting)
+            name, t = find_tab(browser, a.platform, a.meeting)
+            if t:
+                platform, tab, session = name, t, attach(browser, t)
+                expr = EXTRACT % {"platform": json.dumps(platform), "custom": json.dumps(custom)}
+                tracker = Tracker()
+                print(f"switched to {platform}: {tab.get('title', '')[:60]}", flush=True)
+            else:
+                print(f'switch: no meeting tab matching "{a.meeting}"; still reading the old one', flush=True)
         try:
             r = browser.evaluate(session, expr) or {"found": False, "blocks": []}
         except (RuntimeError, ConnectionError) as e:
@@ -238,24 +337,13 @@ def main():
             time.sleep(3)
             platform, tab = find_tab(browser, a.platform, a.meeting)
             if tab:
-                session = browser.attach(tab["targetId"])
+                session = attach(browser, tab)
             continue
         if r["found"] != found_before:
             print("captions visible" if r["found"] else
                   "no captions on the page: turn on captions (CC) in the meeting", flush=True)
             found_before = r["found"]
-        lines = tracker.update(r["blocks"])
-        if lines:
-            with open(a.out, "a", encoding="utf-8") as f:
-                for stamp, speaker, text in lines:
-                    f.write(f"[{stamp}] {speaker + ': ' if speaker else ''}{text}\n")
-                    if translate:
-                        try:
-                            t = translate(text, os.environ.get("WINGMAN_LANG") or "en")
-                            if t:
-                                f.write(f"[{stamp}] ↳ {translate.target}: {t}\n")
-                        except Exception as e:
-                            print(f"translation failed: {e}", flush=True)
+        write_lines(a.out, tracker.update(r["blocks"]), translate)
         time.sleep(a.interval)
 
 
