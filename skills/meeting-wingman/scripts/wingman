@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SC2029: remote commands are built locally on purpose ($RDIR is ours). SC2012: chunk names are HHMMSS.wav.
+# shellcheck disable=SC2029,SC2012
 # meeting-wingman: live transcription of whatever the computer plays (the meeting app),
 # streamed into a Claude Code session.
 #
@@ -227,5 +229,5 @@ case "${1:-help}" in
   level) shift; cmd_level "$@" ;;
   status) cmd_status ;;
   _capture) cmd_capture ;;
-  *) sed -n '2,29p' "$SELF" | sed 's/^# \{0,1\}//' ;;
+  *) sed -n '/^# meeting-wingman:/,/^# Everything runs detached/p' "$SELF" | sed 's/^# \{0,1\}//' ;;
 esac

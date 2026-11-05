@@ -1,0 +1,26 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: shellcheck skills/meeting-wingman/scripts/wingman
+      - name: python syntax
+        run: python3 -m py_compile skills/meeting-wingman/scripts/transcribe_server.py
+      - name: plugin manifests are valid JSON
+        run: |
+          for f in .claude-plugin/*.json; do python3 -m json.tool "$f" > /dev/null && echo "ok $f"; done
+      - name: versions match
+        run: |
+          p=$(python3 -c "import json;print(json.load(open('.claude-plugin/plugin.json'))['version'])")
+          grep -q "^## \[$p\]" CHANGELOG.md || { echo "CHANGELOG.md has no entry for $p"; exit 1; }
+      - name: SKILL.md has name and description
+        run: |
+          head -5 skills/meeting-wingman/SKILL.md | grep -q '^name: meeting-wingman$'
+          head -5 skills/meeting-wingman/SKILL.md | grep -q '^description: '
