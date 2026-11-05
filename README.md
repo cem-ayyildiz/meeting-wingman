@@ -14,7 +14,7 @@
 </p>
 
 **Coach mode.** You are on a client call. Someone asks the question you were hoping to avoid.
-meeting-wingman has been transcribing the call since it started. About 20 seconds later, a card
+meeting-wingman has been following the call since it started. Two seconds after they stop talking, a card
 with three bullets appears: what to say, with your own numbers from your prep notes, and one thing
 **not** to say.
 
@@ -23,8 +23,10 @@ appears in ClickUp (or Linear, Jira, GitHub, Asana) with her as owner. Someone m
 login is still blocked, and that becomes a comment on the existing task instead of a duplicate.
 You confirm each one with a word, or let it write on its own.
 
-No bot joins the call. It hears what your computer's speakers play, transcribes it on a GPU when
-one is free and on the CPU otherwise, and can translate every line into your language as it goes.
+No bot joins the call. It either reads the meeting's own captions in your browser (with speaker
+names) or listens to your computer's audio and transcribes it, on a GPU when one is free and on
+the CPU otherwise. It can translate every line into your language as it goes, and it only wakes
+Claude for what matters: questions, your name, commitments, decisions, numbers.
 
 ```
 /plugin marketplace add cem-ayyildiz/meeting-wingman
@@ -52,13 +54,14 @@ Say it in your own words; these are the kinds of requests the skill is built for
 
 ## Coach mode
 
-For meetings where you have to answer: clients, interviews, reviews, investors. Every new line of
-the transcript reaches Claude. It answers in one of four ways and keeps each reply short, because
-you are reading while you talk.
+For meetings where you have to answer: clients, interviews, reviews, investors. A local filter
+watches the transcript and wakes Claude only for questions, your name and numbers; the rest
+reaches it as a digest every few minutes, so the screen stays quiet until something needs you.
+Each reply is short, because you are reading while you talk.
 
 | When | Claude writes |
 |---|---|
-| Small talk, presentation, no question | `No question.` |
+| Small talk, presentation, no question | Nothing (it arrives later in a digest) |
 | Someone asks you something | **❓ The question in a few words**, then 2–3 bullets you can say as they are, with numbers. If there is a trap, one `Don't say:` line |
 | Someone on your side says a wrong number, a wrong date or an overclaim | One line with the correct version |
 | The meeting reaches a part you present | A 2–3 bullet reminder |
@@ -94,10 +97,23 @@ CLI (`gh` for GitHub Issues). Without one, the items go to a file.
 
 ## Works with Meet, Teams and Zoom
 
-meeting-wingman listens to the computer's audio output, so it does not care which app plays it:
-Google Meet, Microsoft Teams and Zoom, in the browser or as desktop apps, and anything else that
-makes sound (Webex, Slack huddles, Discord, a phone call through the computer). Nothing is
-installed in the meeting and no bot joins it.
+Two sources, pick per meeting:
+
+| | **Captions** (`--captions`) | **Audio** (default) |
+|---|---|---|
+| Works with | Meet, Teams and Zoom **in the browser** (Chrome, Edge, Chromium), captions turned on | Any app that makes sound: Meet, Teams, Zoom desktop or browser, Webex, Slack huddles, Discord |
+| Speaker names | Yes, from the meeting | No |
+| Needs | Remote debugging on once (`chrome://inspect/#remote-debugging`); the browser asks you to allow it | `ffmpeg` and faster-whisper; a GPU helps |
+| Latency | About 2 s after a caption settles | 1–3 s after the speaker pauses |
+| Languages | Those the platform captions | Whisper's ~100 |
+
+Captions are best for team meetings, where it matters who said "I'll take it". Audio works
+everywhere, including the desktop apps. Nothing is installed in the meeting and no bot joins it.
+
+Google Meet captions are tested against the real page structure; the Teams and Zoom web readers
+are new and [need reports](https://github.com/cem-ayyildiz/meeting-wingman/issues) from real meetings.
+If a platform changes its page, `WINGMAN_CAPTION_BLOCK`, `WINGMAN_CAPTION_SPEAKER` and
+`WINGMAN_CAPTION_TEXT` take CSS selectors without waiting for a release.
 
 ## Translation
 
@@ -118,22 +134,26 @@ A sentence takes about 0.3–0.4 s on a laptop CPU. The model is downloaded on f
 ## How it works
 
 <p align="center">
-  <img src="docs/assets/how-it-works.svg" width="900" alt="Meeting app, then system audio captured by ffmpeg in 20-second chunks, then faster-whisper on your CPU, GPU or an SSH host, then Claude Code with its Monitor tool and your prep notes, then you.">
+  <img src="docs/assets/how-it-works.svg" width="900" alt="The meeting reaches the transcript either as captions read from the browser or as audio cut at pauses and transcribed by faster-whisper; a local filter passes only the lines that matter to Claude Code, which shows you answers and tasks.">
 </p>
 
-1. `ffmpeg` records the system audio monitor in 20-second chunks: whatever the meeting app plays,
-   including your own voice coming back from the call.
-2. [faster-whisper](https://github.com/SYSTRAN/faster-whisper) turns each chunk into a
-   timestamped line, optionally with a translation: `large-v3` on a GPU, `small` on a CPU, locally
-   or on another machine over SSH. If the GPU is missing, busy or out of memory, it falls back to
-   the CPU by itself.
-3. Claude Code follows the transcript with its Monitor tool and replies to every new line: answer
-   suggestions in coach mode, tasks and comments in team mode.
+1. **Captions source:** a small DevTools client reads the caption blocks of the Meet, Teams or Zoom
+   tab once a second and writes each settled caption as `[time] Speaker: text`.
+   **Audio source:** `ffmpeg` records the system audio and your microphone; a voice-activity
+   segmenter cuts at pauses, so silence is never transcribed;
+   [faster-whisper](https://github.com/SYSTRAN/faster-whisper) turns each utterance into a line
+   (`large-v3` on a GPU, `small` on a CPU, locally or on another machine over SSH, falling back to
+   the CPU when the GPU is missing, busy or out of memory).
+2. Optionally a local NLLB model adds a translated line under each line.
+3. `wingman watch`, a local filter, sends Claude Code an event only for lines that match the mode
+   (questions, your name, numbers in coach mode; commitments, decisions, blockers, dates in team
+   mode), with the quiet lines before it as context, and a digest of the rest every few minutes.
+4. Claude replies: answer cards in coach mode, tasks and comments in team mode.
 
-**Recommended setup:** speak from your phone, and join the same meeting from your computer with
-mic and camera off. Your voice comes back through the meeting app, so nothing else needs to be
-captured, and you can mute the computer's speakers. On Linux, capture taps the audio before the
-volume control, so there is no echo.
+**Recommended setup:** run Claude Code in **VS Code** (or another editor with the Claude Code
+panel) beside the meeting window, so the cards are next to the call. Join from the computer as you
+normally do; with the audio source your microphone is recorded too. If you speak from another
+device (a phone dialled into the meeting), add `--no-mic`.
 
 ## Install
 
@@ -175,9 +195,10 @@ chat or Cowork. Inside Claude Code the plugin also puts a `wingman` command on t
 |---|---|---|
 | Audio capture | PulseAudio or PipeWire (`pipewire-pulse`), works out of the box | A loopback device such as [BlackHole](https://github.com/ExistentialAudio/BlackHole) plus a Multi-Output Device (speakers + BlackHole) |
 | Tools | `ffmpeg`, `bash`, Python 3.9+ | `ffmpeg`, `bash`, Python 3.9+ |
-| Transcription | `pip install faster-whisper` | `pip install faster-whisper` |
+| Transcription (audio source) | `pip install faster-whisper` | `pip install faster-whisper` |
+| Captions source | Chrome, Edge or Chromium; nothing to install | the same |
 
-Windows is not supported yet.
+Windows is not supported yet. Run `wingman doctor` once: it checks each of these and says what is missing.
 
 A CPU is enough: the `small` model keeps up in real time with lower accuracy. With an NVIDIA GPU
 you get `large-v3` (about 4 GB of GPU memory), which handles names and mixed languages much
@@ -202,9 +223,13 @@ Nothing is required. To change the defaults, put `KEY=value` lines in
 | `WINGMAN_DEVICE` | `auto` | `cuda` or `cpu`. `auto` tries the GPU and falls back to the CPU |
 | `WINGMAN_TRANSLATE_MODEL` | 1.3B on GPU, 600M on CPU | CTranslate2 NLLB model for `-x` (Hugging Face repo or local path) |
 | `WINGMAN_TRANSLATE_DEVICE` | `auto` | Same as `WINGMAN_DEVICE`, for the translator |
-| `WINGMAN_CHUNK` | `20` | Seconds per chunk. Shorter = lower latency, worse accuracy |
-| `WINGMAN_AUDIO_SOURCE` | Linux `@DEFAULT_MONITOR@`, macOS `BlackHole 2ch` | What to capture |
-| `WINGMAN_MIC` | (none) | A second source mixed in, e.g. your microphone |
+| `WINGMAN_PAUSE` | `0.7` | Pause in seconds that ends an utterance |
+| `WINGMAN_MAX_CHUNK` | `15` | Longest utterance before a forced cut |
+| `WINGMAN_AUDIO_SOURCE` | Linux `@DEFAULT_MONITOR@`, macOS `BlackHole 2ch` | System audio to capture |
+| `WINGMAN_MIC` | `auto` | `auto` (the default microphone), `none`, or a source name. A Bluetooth headset switches to headset mode when its microphone opens; in a call the app already does this |
+| `WINGMAN_DIGEST` | `300` | Seconds between digests of lines that woke nobody |
+| `WINGMAN_NAMES` | (none) | Your name(s), so "Ana, what do you think?" wakes Claude (same as `-n`) |
+| `WINGMAN_CDP` | `main` | Browser for `--captions`: `main` (your own, via its DevToolsActivePort) or a debugging port |
 
 </details>
 
@@ -226,11 +251,14 @@ Claude runs it for you. You can also run it yourself
 ([`skills/meeting-wingman/scripts/wingman`](skills/meeting-wingman/scripts/wingman)):
 
 ```bash
-wingman start -l en -t "Acme, Project Falcon, SOC 2"   # language + recognition hints
-wingman start -l ja -x en                              # Japanese call, English under each line
-wingman watch                                          # follow the transcript
-wingman level                                          # is any audio being captured?
-wingman stop notes/client-call-transcript.txt          # stop and save
+wingman doctor                                          # check the setup once
+wingman start -m coach -n Ana -l en -t "Acme, SOC 2"   # audio, wake on questions, your name, numbers
+wingman start -m team -n Ana --captions                 # captions from the browser tab
+wingman start -l ja -x en                               # Japanese call, English under each line
+wingman watch                                           # events for Claude (--raw: every line)
+wingman show 60                                         # the last 60 lines
+wingman level                                           # system audio and microphone levels
+wingman stop notes/client-call-transcript.txt           # stop and save, keep no other copy
 wingman status
 ```
 
@@ -238,9 +266,10 @@ State lives in `~/.local/state/meeting-wingman/`.
 
 ## Limits
 
-- **About 20–25 seconds behind.** Fine for questions, which take time to finish anyway. Too slow
-  for word-by-word prompting.
-- **No speaker labels.** Claude infers who is talking from the content.
+- **A second or two behind,** plus the time Claude takes to write the card.
+- **No speaker labels with the audio source.** Use captions when names matter.
+- **The filter is keyword-based.** It catches most questions and commitments in English, Turkish,
+  German, French, Spanish, Italian, Dutch and Portuguese; the digest covers what it misses.
 - **Names and acronyms come out garbled** without a term list, and sometimes with one. Claude reads for meaning.
 - **Translation is literal**, sentence by sentence, and weaker on the CPU model. Claude reads the
   original for meaning and numbers.
@@ -253,7 +282,7 @@ Everything the plugin does is in readable bash and Python in
 
 | | |
 |---|---|
-| **Runs** | `ffmpeg` to record the system audio, `python3` with faster-whisper (and CTranslate2 for translation) to transcribe, `rsync` and `ssh` only in remote mode |
+| **Runs** | `ffmpeg` to record the system audio and microphone, `python3` with faster-whisper (and CTranslate2 for translation) to transcribe, `rsync` and `ssh` only in remote mode. With `--captions`: a DevTools connection to your own browser on `127.0.0.1`, which lists the open tabs to find the meeting and then reads only the caption text of that tab |
 | **Sends** | Audio chunks only to the SSH host you configure in `WINGMAN_REMOTE_HOST`, and only if you configure one. Tasks and comments only to the tracker you connected yourself, in team mode, with your confirmation unless you chose `auto`. Transcript lines are read by Claude Code like any other text in your session |
 | **Fetches** | The faster-whisper speech model and, with `-x`, the NLLB-200 translation model, from the Hugging Face Hub on first use |
 | **Keeps** | Audio chunks for a few seconds, until they are transcribed. The transcript only at the path you give `wingman stop`; no copy is left in the state folder or on the remote host |

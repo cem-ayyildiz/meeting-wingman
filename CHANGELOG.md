@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.3.0] - 2026-11-05
+
+- **Captions source** (`wingman start --captions`): reads the live captions of a Google Meet,
+  Microsoft Teams or Zoom web tab over the DevTools protocol, with speaker names, no audio and no
+  GPU. Connects to your own browser once (it asks you to allow it) or to a debugging port.
+  Meet is tested against its page structure; Teams and Zoom readers are new.
+- **Filter** (`wingman watch`): wakes Claude only for questions, the user's name, numbers
+  (coach mode) or commitments, decisions, blockers, dates (team mode), with the quiet lines before
+  it as context and a digest of the rest every 5 minutes. With captions it knows the user's own
+  lines. `wingman watch --raw` gives every line.
+- **Cut at pauses**: a voice-activity segmenter replaces the fixed 20-second chunks. A line now
+  arrives 1–3 s after the speaker pauses instead of 20–25 s, and silence is never transcribed.
+- **Microphone recorded by default** together with the system audio (`--no-mic` to leave it out).
+- `wingman doctor` checks the setup; `wingman show N` prints recent lines; `wingman level` measures
+  system audio and microphone separately; `wingman stop` waits for the last utterance.
+- Tests for the filter, the segmenter and the caption reader (including an end-to-end run against a
+  mock Meet page in headless Chrome) run in CI.
+- README: the two sources, VS Code as the recommended place to run it, new diagram.
+
 ## [0.2.1] - 2026-11-05
 
 - `wingman stop` keeps no copy of the meeting behind: the local transcript is moved to the path you

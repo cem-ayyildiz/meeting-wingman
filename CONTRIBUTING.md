@@ -4,6 +4,10 @@ Thanks for helping. The most useful contributions right now:
 
 - **macOS testing.** Capture through BlackHole is written but has not been tested much.
 - **Windows capture** (WASAPI loopback through ffmpeg `dshow`, or another approach).
+- **Caption readers for Teams and Zoom**: if `--captions` misses lines or names in a real meeting,
+  open an issue with the page's caption DOM (Elements panel, the caption area only, with names
+  removed) or a PR against `EXTRACT` in `captions.py`.
+- **Trigger patterns** for more languages in `gate.py`, with a test in `tests/test_gate.py`.
 - **Hallucination filters** for more languages: the phrases Whisper invents during silence in your
   language, added to `HALLUCINATIONS` in `transcribe_server.py`.
 - **Coaching rules** in `SKILL.md` that you have seen work in real meetings.
@@ -15,6 +19,10 @@ Thanks for helping. The most useful contributions right now:
 | `skills/meeting-wingman/SKILL.md` | What Claude does before, during and after the meeting |
 | `skills/meeting-wingman/scripts/wingman` | Start, watch, stop the pipeline (bash) |
 | `skills/meeting-wingman/scripts/transcribe_server.py` | The faster-whisper transcriber |
+| `skills/meeting-wingman/scripts/segmenter.py` | Cuts audio at pauses (standard library only) |
+| `skills/meeting-wingman/scripts/gate.py` | Decides which lines wake Claude (standard library only) |
+| `skills/meeting-wingman/scripts/captions.py`, `cdp.py` | Reads Meet/Teams/Zoom captions from the browser |
+| `tests/` | Unit tests and a mock Meet page |
 | `skills/meeting-wingman/templates/prep-notes.md` | Prep document template |
 | `.claude-plugin/` | Plugin and marketplace manifests |
 
@@ -22,7 +30,8 @@ Thanks for helping. The most useful contributions right now:
 
 ```bash
 shellcheck skills/meeting-wingman/scripts/wingman
-python3 -m py_compile skills/meeting-wingman/scripts/transcribe_server.py
+python3 -m py_compile skills/meeting-wingman/scripts/*.py
+python3 -m unittest discover -s tests -v      # the browser test needs Chrome or Chromium
 claude plugin validate .
 ```
 

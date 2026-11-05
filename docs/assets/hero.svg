@@ -61,10 +61,10 @@
 
     <line x1="472" y1="320" x2="908" y2="320" stroke="#30363d"/>
     <text x="472" y="352" font-size="15"><tspan fill="#ff7b72" font-weight="700">Don't say:</tspan><tspan dx="6" fill="#e6edf3">“It never goes offline.”</tspan></text>
-    <text x="472" y="378" font-size="13" fill="#8b949e">Prep notes Q7 · 22 s after the question</text>
+    <text x="472" y="378" font-size="13" fill="#8b949e">Prep notes Q7 · 2 s after the question</text>
   </g>
 
   <!-- footer -->
   <line x1="0" y1="452" x2="960" y2="452" stroke="#21262d"/>
-  <text x="28" y="481" class="sans" font-size="13" fill="#8b949e">Listens to what your computer plays  ·  transcribes on your machine or your GPU box  ·  nothing joins the call</text>
+  <text x="28" y="481" class="sans" font-size="13" fill="#8b949e">Reads the meeting’s captions or listens to the audio  ·  runs on your machine  ·  no bot joins the call</text>
 </svg>

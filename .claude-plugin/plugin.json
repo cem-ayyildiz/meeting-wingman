@@ -1,8 +1,8 @@
 {
   "name": "meeting-wingman",
   "displayName": "Meeting Wingman",
-  "version": "0.2.1",
-  "description": "Live wingman for Meet, Teams and Zoom calls: transcribes (and translates) the meeting on GPU or CPU, suggests answers to questions, and turns action items into tasks and comments in your tracker.",
+  "version": "0.3.0",
+  "description": "Live wingman for Meet, Teams and Zoom calls: reads the meeting's captions or transcribes its audio (GPU or CPU, with translation), wakes Claude only for questions, commitments and decisions, suggests answers and turns action items into tasks.",
   "author": {
     "name": "Cem Ayyildiz",
     "url": "https://github.com/cem-ayyildiz"

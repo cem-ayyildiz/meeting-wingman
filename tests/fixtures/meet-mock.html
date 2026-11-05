@@ -1,0 +1,32 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Mock Meet</title></head>
+<body>
+<!-- Mimics the structure of Google Meet's captions panel: a labelled region holding one block per
+     speaker turn (avatar, name, text). Text grows word by word and the last word is sometimes
+     corrected, like the real thing. -->
+<div role="region" aria-label="Captions"><div id="list"></div></div>
+<script>
+const list = document.getElementById("list");
+function block(name) {
+  const b = document.createElement("div");
+  b.innerHTML = '<div><img alt="" src="data:image/gif;base64,R0lGODlhAQABAAAAACw="><div class="n"></div></div><div class="t"></div>';
+  b.querySelector(".n").textContent = name;
+  list.appendChild(b);
+  return b.querySelector(".t");
+}
+const script = [
+  [300,  () => window.m = block("Maria")],
+  ...("Good morning everyone, let's starts".split(" ").map((w, i) => [100, () => m.textContent += (i ? " " : "") + w])),
+  [100,  () => m.textContent = m.textContent.replace("starts", "start")],          // correction
+  ...("with the pilot results.".split(" ").map(w => [100, () => m.textContent += " " + w])),
+  [400,  () => window.y = block("You")],
+  ...("What happens to the data when a site goes offline?".split(" ").map((w, i) => [80, () => y.textContent += (i ? " " : "") + w])),
+  [2500, () => window.k = block("Maria")],
+  ...(("The gateway keeps seven days of data on the device. When the link comes back it uploads everything in order, " +
+       "and the dashboard fills the gap within a few minutes. In the pilot the longest outage was thirty one hours. " +
+       "Nothing was lost.").split(" ").map((w, i) => [40, () => k.textContent += (i ? " " : "") + w])),
+  [300,  () => list.firstElementChild.remove()],                                   // scrolls away
+];
+(async () => { for (const [d, f] of script) { await new Promise(r => setTimeout(r, d)); f(); } document.title = "done"; })();
+</script>
+</body></html>

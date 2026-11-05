@@ -1,44 +1,50 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="210" viewBox="0 0 960 210" role="img" aria-label="Flow: meeting app, system audio capture, Whisper transcription, Claude Code, you">
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="270" viewBox="0 0 960 270" role="img" aria-label="Flow: captions from the browser tab, or audio cut at pauses and transcribed by faster-whisper, go into one transcript; a local filter passes only the lines that matter to Claude Code, which shows you answers and tasks">
   <style>
     .t { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, "DejaVu Sans", sans-serif; }
     .n { font-size: 15px; font-weight: 700; fill: #1f2328; }
     .s { font-size: 12.5px; fill: #59636e; }
     .a { font-size: 12px; fill: #59636e; }
   </style>
-  <rect x="0.5" y="0.5" width="959" height="209" rx="14" fill="#f6f8fa" stroke="#d1d9e0"/>
+  <rect x="0.5" y="0.5" width="959" height="269" rx="14" fill="#f6f8fa" stroke="#d1d9e0"/>
   <defs>
     <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
       <path d="M0,0 L10,5 L0,10 z" fill="#8c959f"/>
     </marker>
   </defs>
-
   <g class="t">
-    <rect x="24" y="52" width="150" height="86" rx="10" fill="#ffffff" stroke="#d1d9e0"/>
-    <text x="99" y="88" text-anchor="middle" class="n">Meeting app</text>
-    <text x="99" y="110" text-anchor="middle" class="s">Zoom · Meet · Teams</text>
+    <text x="24" y="34" class="a">MEETING-WINGMAN PIPELINE</text>
 
-    <rect x="214" y="52" width="160" height="86" rx="10" fill="#ffffff" stroke="#d1d9e0"/>
-    <text x="294" y="88" text-anchor="middle" class="n">System audio</text>
-    <text x="294" y="110" text-anchor="middle" class="s">ffmpeg · 20 s chunks</text>
+    <!-- inputs -->
+    <rect x="24" y="52" width="178" height="70" rx="10" fill="#ffffff" stroke="#d1d9e0"/>
+    <text x="113" y="82" text-anchor="middle" class="n">Captions</text>
+    <text x="113" y="103" text-anchor="middle" class="s">Meet · Teams · Zoom tab</text>
 
-    <rect x="414" y="52" width="170" height="86" rx="10" fill="#ffffff" stroke="#d1d9e0"/>
-    <text x="499" y="88" text-anchor="middle" class="n">faster-whisper</text>
-    <text x="499" y="110" text-anchor="middle" class="s">local CPU/GPU or SSH</text>
+    <rect x="24" y="148" width="178" height="70" rx="10" fill="#ffffff" stroke="#d1d9e0"/>
+    <text x="113" y="178" text-anchor="middle" class="n">Audio</text>
+    <text x="113" y="199" text-anchor="middle" class="s">system + mic, any app</text>
 
-    <rect x="624" y="52" width="160" height="86" rx="10" fill="#fff4e8" stroke="#f0883e"/>
-    <text x="704" y="88" text-anchor="middle" class="n">Claude Code</text>
-    <text x="704" y="110" text-anchor="middle" class="s">Monitor + prep notes</text>
+    <rect x="236" y="148" width="170" height="70" rx="10" fill="#ffffff" stroke="#d1d9e0"/>
+    <text x="321" y="178" text-anchor="middle" class="n">faster-whisper</text>
+    <text x="321" y="199" text-anchor="middle" class="s">cut at pauses · GPU or CPU</text>
 
-    <rect x="824" y="52" width="112" height="86" rx="10" fill="#ffffff" stroke="#d1d9e0"/>
-    <text x="880" y="88" text-anchor="middle" class="n">You</text>
-    <text x="880" y="110" text-anchor="middle" class="s">read, then speak</text>
+    <rect x="440" y="98" width="140" height="72" rx="10" fill="#ffffff" stroke="#d1d9e0"/>
+    <text x="510" y="128" text-anchor="middle" class="n">Transcript</text>
+    <text x="510" y="149" text-anchor="middle" class="s">+ translation (-x)</text>
 
-    <line x1="176" y1="95" x2="210" y2="95" stroke="#8c959f" stroke-width="1.5" marker-end="url(#ar)"/>
-    <line x1="376" y1="95" x2="410" y2="95" stroke="#8c959f" stroke-width="1.5" marker-end="url(#ar)"/>
-    <line x1="586" y1="95" x2="620" y2="95" stroke="#8c959f" stroke-width="1.5" marker-end="url(#ar)"/>
-    <line x1="786" y1="95" x2="820" y2="95" stroke="#8c959f" stroke-width="1.5" marker-end="url(#ar)"/>
+    <rect x="614" y="98" width="120" height="72" rx="10" fill="#ffffff" stroke="#d1d9e0"/>
+    <text x="674" y="128" text-anchor="middle" class="n">Filter</text>
+    <text x="674" y="149" text-anchor="middle" class="s">only what matters</text>
 
-    <text x="24" y="36" class="a">MEETING-WINGMAN PIPELINE</text>
-    <text x="24" y="178" class="a">About 20–25 s from speech to suggestion. No bot joins the call; it only hears what your speakers play.</text>
+    <rect x="768" y="98" width="168" height="72" rx="10" fill="#fff4e8" stroke="#f0883e"/>
+    <text x="852" y="128" text-anchor="middle" class="n">Claude Code</text>
+    <text x="852" y="149" text-anchor="middle" class="s">answers · tasks · comments</text>
+
+    <path d="M204 87 C 320 87, 360 118, 436 124" fill="none" stroke="#8c959f" stroke-width="1.5" marker-end="url(#ar)"/>
+    <line x1="204" y1="183" x2="232" y2="183" stroke="#8c959f" stroke-width="1.5" marker-end="url(#ar)"/>
+    <path d="M408 178 C 420 170, 425 152, 436 146" fill="none" stroke="#8c959f" stroke-width="1.5" marker-end="url(#ar)"/>
+    <line x1="582" y1="134" x2="610" y2="134" stroke="#8c959f" stroke-width="1.5" marker-end="url(#ar)"/>
+    <line x1="736" y1="134" x2="764" y2="134" stroke="#8c959f" stroke-width="1.5" marker-end="url(#ar)"/>
+
+    <text x="24" y="248" class="a">1–3 s from speech to the transcript. Claude hears about questions, names, commitments, decisions and numbers at once, the rest every few minutes.</text>
   </g>
 </svg>

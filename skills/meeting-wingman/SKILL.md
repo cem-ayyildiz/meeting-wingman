@@ -1,14 +1,23 @@
 ---
 name: meeting-wingman
-description: Live meeting wingman for Google Meet, Microsoft Teams, Zoom or any call. Transcribes the meeting in near real time (and can translate it), then either coaches the user (suggests a short answer when a question comes up, warns what not to say) or works the meeting like a teammate (turns action items and decisions into tasks in the connected tracker such as ClickUp, Linear, Jira, GitHub or Asana, or adds them as comments on existing tasks). Afterwards saves the transcript and lists follow-ups. Use for "I'm joining a meeting, listen and help me", "start the meeting assistant", "help me with the questions in this call", "take the action items from our standup into ClickUp", "meeting wingman", "coach me live", "translate this call for me".
+description: Live meeting wingman for Google Meet, Microsoft Teams, Zoom or any call. Follows the meeting in near real time, from the system audio or from the meeting's own captions in the browser (with speaker names), can translate it, wakes up only for lines that matter, and then either coaches the user (suggests a short answer when a question comes up, warns what not to say) or works the meeting like a teammate (turns action items and decisions into tasks in the connected tracker such as ClickUp, Linear, Jira, GitHub or Asana, or adds them as comments on existing tasks). Afterwards saves the transcript and lists follow-ups. Use for "I'm joining a meeting, listen and help me", "start the meeting assistant", "help me with the questions in this call", "take the action items from our standup into ClickUp", "meeting wingman", "coach me live", "translate this call for me".
 ---
 
 # Meeting wingman
 
-Whatever the computer plays (the Meet, Teams or Zoom window, desktop app or browser) is cut into
-20-second chunks and transcribed with faster-whisper: on a GPU when one is usable, otherwise on
-the CPU, locally or on a GPU host over SSH. Lines stream into this session through the Monitor
-tool. Latency is about 20–25 seconds per line.
+Two ways to follow a Meet, Teams or Zoom call:
+
+- **Audio** (default, works with any app, desktop or browser): the system audio and the
+  microphone are cut at speech pauses and transcribed with faster-whisper, on a GPU when one is
+  usable and on the CPU otherwise, locally or on a GPU host over SSH. A line arrives 1–3 seconds
+  after the speaker pauses. No speaker names.
+- **Captions** (`--captions`, the meeting open in Chrome, Edge or Chromium): the meeting's own live
+  captions are read from the browser tab. Speaker names included, no GPU, no audio recorded.
+  Best for team mode, where knowing who said "I'll do it" matters.
+
+A local filter (`wingman watch`) wakes you only for lines that matter: questions, the user's name,
+commitments, decisions, blockers, dates and numbers, depending on the mode. Everything else
+arrives as a digest every few minutes, so you keep up with the meeting without a reply per sentence.
 
 The command is `${CLAUDE_SKILL_DIR}/scripts/wingman` (below: `wingman`). `wingman help` lists
 every option. Talk to the user in their own language throughout.
@@ -24,29 +33,44 @@ There are two modes. Ask which one, or infer it from the request; both can run a
 
 1. **Consent.** Remind the user once, briefly, that they are responsible for telling the other
    participants that the meeting is being transcribed, where the law or etiquette requires it.
-2. **Setup.** Recommended: the user speaks from their phone and also joins from the computer
-   with mic and camera off. Their own voice comes back through the meeting app, so no microphone
-   capture is needed, and the computer's speakers can be muted (on Linux capture taps the audio
-   before the volume control). If they join only from the computer, set `WINGMAN_MIC` so their
-   own voice is captured too. On macOS capture needs a loopback device such as BlackHole.
+2. **Setup.** First time on a machine, run `wingman doctor` and fix what it marks ✗.
+   - Recommend running Claude Code in **VS Code** (or another editor with the Claude Code panel)
+     next to the meeting window: the replies stay readable beside the call.
+   - **Audio source**: the user joins from the computer as usual; the system audio and the default
+     microphone are both recorded. If they speak from another device (a phone dialled into the
+     same meeting), add `--no-mic`, because their voice already comes back through the meeting app.
+     On macOS system audio needs a loopback device such as BlackHole.
+   - **Captions source**: the meeting must be open in the browser (not the desktop app) with
+     captions turned on (CC), in the meeting's language. Remote debugging must be on once:
+     `chrome://inspect/#remote-debugging` (or `edge://inspect`). When `wingman start --captions`
+     connects, the browser asks "Allow remote debugging?": tell the user to click Allow. If the
+     user prefers a separate browser, `--cdp <port>` with a browser started with
+     `--remote-debugging-port=<port>`.
+   - Pick captions when the meeting runs in the browser and speaker names help (team mode); pick
+     audio for desktop apps, or when captions are not available in the meeting's language.
 3. **Languages.** The meeting language (`-l tr`, `-l en` ..., or `-l auto` for a mixed meeting).
    If the user wants every line translated as well, add `-x <language>`: a translated line
    appears under each original line, computed on the GPU or CPU by a local NLLB model (first run
    downloads it, about 0.6 GB). You can also translate in your own replies without `-x`.
-4. **Term list.** 10–25 names, organisations, product names and acronyms likely to be said.
-   They are recognition hints; without them names come out mangled. In team mode, take the
-   names of the team members from the tracker.
-5. **Coach mode:** if the project has prep notes, read them. If not and there is time, offer to
+4. **Term list** (audio source). 10–25 names, organisations, product names and acronyms likely to
+   be said. They are recognition hints; without them names come out mangled. In team mode, take
+   the names of the team members from the tracker.
+5. **The user's name(s)** for `-n`, so "Ana, what do you think?" wakes you. Include short forms.
+6. **Coach mode:** if the project has prep notes, read them. If not and there is time, offer to
    write them from `${CLAUDE_SKILL_DIR}/templates/prep-notes.md`. Just before the meeting, if
    asked, give **one screen** of "three things to remember".
-6. **Team mode:** see §3a.
+7. **Team mode:** see §3a.
 
 ## 1. Start
 
 ```
-wingman start -l en -t "Acme, Project Falcon, SOC 2, Kubernetes, ..."
-wingman start -l ja -x en -t "..."      # Japanese meeting, English translation under each line
+wingman start -m coach -n "Ana" -l en -t "Acme, Project Falcon, SOC 2, ..."   # client call, audio
+wingman start -m team -n "Ana" --captions                                     # team sync in Meet
+wingman start -m coach -l ja -x en                                            # Japanese call, English under each line
 ```
+
+`-m` sets what wakes you: `coach` (questions, the user's name, numbers), `team` (commitments,
+decisions, blockers, dates, the user's name) or `both`.
 
 - Do not set up the Monitor until you see `READY`. If it fails, summarise the error for the user.
   `READY` names the model and device; if the GPU was busy it says `cpu` and accuracy is lower.
@@ -57,20 +81,28 @@ wingman start -l ja -x en -t "..."      # Japanese meeting, English translation 
   then `wingman start ...` again; later prepend the lines from the temporary file to the transcript.
 - **Monitor**: command `wingman watch` (full path), `timeout_ms` 1800000, description
   "live meeting transcript". When the 30 minutes run out, re-arm at once with `wingman watch 2`
-  and skip the lines you have already seen.
-- **Check**: ask the user to play or say a test sentence. If no line arrives, run
-  `wingman level`. Around −60 dB means nothing is playing: the computer is not in the meeting,
-  the app or tab is muted, or the default output device is the wrong one.
+  and skip what you have already seen.
+- **Events** from `wingman watch`:
+  - `▶ question, name · 14:02:33` followed by the trigger line and, marked `…`, the quiet lines
+    since the previous event. Act on it (§2, §3).
+  - `◇ digest 14:00:10–14:05:02 · 12 lines, no trigger`: the meeting moved on with nothing for
+    you. Read it for context and reply with at most one short line (or "—"); speak up only if
+    something in it needs the user (a wrong number, a missed commitment).
+  - Need more context? `wingman show 60` prints the last 60 lines.
+- **Check**: ask the user to say a test sentence (audio) or to check that captions are on
+  (captions). If nothing arrives, run `wingman level` (audio): around −60 dB means silence, the
+  computer is not in the meeting, the app is muted, or the wrong device is selected.
+  `wingman status` shows what is running.
 - Anything else the computer plays (another call, a video) is transcribed too. If the user does
   not want that before the meeting starts, stop the Monitor, leave the pipeline running, and
   re-arm it when they say the meeting has begun.
 
 ## 2. During the meeting: coach mode
 
-Every Monitor event needs a reply. Keep it short; the user is reading while talking.
+Keep every reply short; the user is reading while talking.
 
-- **No question**: reply only "No question." (in the user's language), with at most half a
-  sentence of context.
+- **A trigger that is not really a question for the user** (a rhetorical question, the user's
+  own question): reply "—" or one line at most.
 - **A question**: a bold header line `**❓ <the gist of the question>**`, then 2–3 bullets in
   spoken language, with numbers, ready to say as they are. If there is a trap, add one line
   `**Don't say:** ...`. If the prep notes answer it (Q-numbers), use that answer.
@@ -127,9 +159,10 @@ Other Monitor events get "No action item." or nothing at all if the user asked f
 
 - **Check before creating.** If an open task matches, propose a comment instead of a duplicate.
   Never propose the same item twice in one meeting; update the earlier proposal instead.
-- **Owners.** Assign only people who are members of the workspace, matched by name. If the
-  transcript is unclear about who, leave it unassigned and say so. There is no speaker
-  separation: "I'll do it" needs context to know who "I" is; if unsure, ask the user.
+- **Owners.** Assign only people who are members of the workspace, matched by name. With the
+  captions source each line starts with the speaker's name ("You" is the user), so "I'll do it"
+  has an owner. With the audio source there are no speaker names: infer from context, and if
+  unsure, leave it unassigned and ask the user.
 - **Content.** Short, factual, in the workspace's language. Add one line:
   "From <meeting name>, <date> ~<time>". Never paste the full transcript or long quotes into
   the tracker, and never post what was said in confidence or off topic.
@@ -139,9 +172,11 @@ Other Monitor events get "No action item." or nothing at all if the user asked f
 
 ## 4. Both modes
 
-- **Transcription errors**: the server filters most lines Whisper invents during silence; if one
-  slips through, say "transcription noise". Words come out garbled, especially names and
-  acronyms; infer from meaning. If you are unsure who is speaking, do not attribute.
+- **Transcription errors** (audio): silence is never transcribed and the server filters the
+  phrases Whisper tends to invent; if one slips through, say "transcription noise". Words come out
+  garbled, especially names and acronyms; infer from meaning. If you are unsure who is speaking,
+  do not attribute. Captions have their own errors, and the platform may rewrite the last words
+  of a caption; lines are emitted once a caption has settled.
 - With `-x`, translated lines start with `↳ <language>:`. Use the original for meaning and
   numbers; the translation is for the user.
 - The user's own message always takes priority over a Monitor event.
@@ -169,6 +204,10 @@ Ask where to save it if the project has no obvious place.
 | Symptom | Cause / fix |
 |---|---|
 | `wingman start` prints an SSH warning | Key not in the agent: the user runs `ssh-add`. See §1 |
+| First run on a machine | `wingman doctor`: ffmpeg, faster-whisper, GPU, audio levels, microphone, SSH host, browser debugging |
+| `--captions` fails to connect | Remote debugging is off (`chrome://inspect/#remote-debugging`), or the user did not click Allow. Each `wingman start --captions` asks once |
+| `--captions` says no captions on the page | Captions (CC) are off in the meeting, or the meeting runs in the desktop app; use the audio source instead |
+| A Bluetooth headset sounds worse after start | Opening its microphone switches it to headset mode. In a call the app already does this; otherwise use `--no-mic` |
 | `READY` says `cpu` although there is a GPU | GPU busy or out of memory; it fell back on purpose. `nvidia-smi` shows who holds it |
 | No line ever arrives | `wingman level`. Is the computer in the meeting, is the app muted, is the default output right? (Linux: `wpctl status`) |
 | Lines stop for minutes although there is sound | Remote mode: `ssh <host> 'ls <dir>/in; tail <dir>/server.log'`. If chunks pile up, the server died: `wingman stop` + `wingman start` |

@@ -11,8 +11,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: shellcheck
         run: shellcheck skills/meeting-wingman/scripts/wingman
+      - name: shellcheck bin
+        run: shellcheck bin/wingman
       - name: python syntax
-        run: python3 -m py_compile skills/meeting-wingman/scripts/transcribe_server.py
+        run: python3 -m py_compile skills/meeting-wingman/scripts/*.py
+      - name: tests (gate, segmenter, captions; the browser test uses the runner's Chrome)
+        run: python3 -m unittest discover -s tests -v
       - name: plugin manifests are valid JSON
         run: |
           for f in .claude-plugin/*.json; do python3 -m json.tool "$f" > /dev/null && echo "ok $f"; done

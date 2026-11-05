@@ -120,7 +120,7 @@ while True:
         continue
     for f in chunks:
         name = os.path.basename(f)[:-4]
-        stamp = f"{name[0:2]}:{name[2:4]}:{name[4:6]}" if re.fullmatch(r"\d{6}", name) else name
+        stamp = f"{name[0:2]}:{name[2:4]}:{name[4:6]}" if re.match(r"\d{6}", name) else name
         try:
             # condition_on_previous_text=False: with it on, muffled audio made the model repeat
             # the previous sentence for minutes.
