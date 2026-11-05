@@ -352,6 +352,16 @@ locally and cost no tokens.
 </details>
 
 <details>
+<summary><strong>Does the meeting tab have to stay in front?</strong></summary>
+
+No. Chrome stops rendering a tab you are not looking at (another tab in front, the window
+minimised, screen sharing), and Meet and Teams then stop updating their captions. The caption
+reader keeps the meeting tab rendering while it reads: focus emulation, an "active" page lifecycle
+and a 16-pixel screencast, renewed every 30 seconds. On Chrome 156 that took a background tab from
+0 to 58 frames per second, the same as a tab in front. The audio source is not affected at all.
+</details>
+
+<details>
 <summary><strong>Captions or audio?</strong></summary>
 
 Captions when the meeting is in the browser and you want speaker names (team meetings): no GPU,

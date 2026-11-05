@@ -112,20 +112,31 @@ class Browser:
         self.ws = WebSocket(url, timeout=approve_timeout)
         self.ws.sock.settimeout(30)
         self.next_id = 0
+        self.on_event = None    # callable(message) for events (e.g. screencast frames to acknowledge)
 
     def call(self, method, params=None, session=None):
         self.next_id += 1
-        msg = {"id": self.next_id, "method": method, "params": params or {}}
+        my_id = self.next_id   # notify() may send more commands while we wait for this answer
+        msg = {"id": my_id, "method": method, "params": params or {}}
         if session:
             msg["sessionId"] = session
         self.ws.send(json.dumps(msg))
         while True:
             r = json.loads(self.ws.recv())
-            if r.get("id") == self.next_id:
+            if r.get("id") == my_id:
                 if "error" in r:
                     raise RuntimeError(f"{method}: {r['error'].get('message')}")
                 return r.get("result", {})
-            # events are ignored
+            if "method" in r and self.on_event:
+                self.on_event(r)
+
+    def notify(self, method, params=None, session=None):
+        """Send a command without waiting for its result (used to acknowledge events)."""
+        self.next_id += 1
+        msg = {"id": self.next_id, "method": method, "params": params or {}}
+        if session:
+            msg["sessionId"] = session
+        self.ws.send(json.dumps(msg))
 
     def pages(self):
         return [t for t in self.call("Target.getTargets")["targetInfos"] if t.get("type") == "page"]

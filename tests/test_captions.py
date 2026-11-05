@@ -136,9 +136,9 @@ class MockMeetInBrowser(unittest.TestCase):
                     break
                 except OSError:
                     time.sleep(0.5)
-            env = dict(os.environ, WINGMAN_CAPTION_URL="meet-mock")
             cap = subprocess.Popen(["python3", os.path.join(_path.SCRIPTS, "captions.py"), out, "--cdp", str(port),
-                                    "--interval", "0.4"], env=env, stdout=open(log, "w"), stderr=subprocess.STDOUT)
+                                    "--interval", "0.4", "--tab-url", "meet-mock"],
+                                   stdout=open(log, "w"), stderr=subprocess.STDOUT)
             time.sleep(2)
             # open the mock meeting only now, so the reader sees it from the first caption
             b = cdp.connect(str(port))
