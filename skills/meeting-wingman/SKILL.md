@@ -244,7 +244,7 @@ Ask where to save it if the project has no obvious place.
 | First run on a machine | `wingman doctor`: ffmpeg, faster-whisper, GPU, audio levels, microphone, SSH host, browser debugging |
 | `--captions` fails to connect | Remote debugging is off (`chrome://inspect/#remote-debugging`), or the user did not click Allow. Each `wingman start --captions` asks once |
 | `--app` records nothing | The app has not played sound yet, or its name differs: `wingman meetings` lists the names; the match is a case-insensitive regex |
-| `--captions` lines arrive minutes late while screen sharing | The reader asks Chrome not to throttle the tab; if it still happens, keep the meeting window visible |
+| `--captions` lines arrive late or stop while the meeting tab is in the background | The reader keeps the tab rendering (focus emulation + a tiny screencast, renewed every 30 s), so a background tab or minimised window should keep working; if lines still stall, `wingman stop` and start again, or keep the meeting window visible |
 | Zoom captions arrive in fragments | Zoom's overlay rolls word groups; use the audio source for Zoom |
 | `--captions` reads the wrong meeting | Several meeting tabs are open: `--meeting "<title or code>"` |
 | `--captions` says no captions on the page | Captions (CC) are off in the meeting, or the meeting runs in the desktop app; use the audio source instead |

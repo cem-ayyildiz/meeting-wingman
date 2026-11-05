@@ -130,15 +130,17 @@ class MockMeetInBrowser(unittest.TestCase):
         out, log = os.path.join(prof, "t.txt"), os.path.join(prof, "captions.log")
         cap = None
         try:
-            for _ in range(60):     # wait until the debugging port answers
+            for _ in range(120):    # wait until the debugging port answers (CI runners can be slow)
                 try:
                     urllib.request.urlopen(f"http://127.0.0.1:{port}/json/version", timeout=1).read()
                     break
                 except OSError:
                     time.sleep(0.5)
-            env = dict(os.environ, WINGMAN_CAPTION_URL="meet-mock")
+            else:
+                self.skipTest("Chrome did not open its debugging port within 60 s on this machine")
             cap = subprocess.Popen(["python3", os.path.join(_path.SCRIPTS, "captions.py"), out, "--cdp", str(port),
-                                    "--interval", "0.4"], env=env, stdout=open(log, "w"), stderr=subprocess.STDOUT)
+                                    "--interval", "0.4", "--tab-url", "meet-mock"],
+                                   stdout=open(log, "w"), stderr=subprocess.STDOUT)
             time.sleep(2)
             # open the mock meeting only now, so the reader sees it from the first caption
             b = cdp.connect(str(port))

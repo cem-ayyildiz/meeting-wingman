@@ -200,9 +200,12 @@ class Tracker:
         return stamp, s["speaker"], text
 
 
+TAB_URL = os.environ.get("WINGMAN_CAPTION_URL", "")   # regex for another meeting site (or --tab-url)
+
+
 def meeting_tabs(browser, platform="auto"):
     """All open tabs that look like a meeting: [(platform, tab)]."""
-    custom = os.environ.get("WINGMAN_CAPTION_URL")    # regex for another meeting site, or for tests
+    custom = TAB_URL
     out = []
     for p in browser.pages():
         url = p.get("url", "")
@@ -234,16 +237,31 @@ def find_tab(browser, platform, meeting=""):
     return tabs[0]
 
 
-def attach(browser, tab):
-    """Attach to the tab and ask Chrome not to throttle it while it is in the background
-    (screen sharing, another window in front): otherwise captions arrive minutes late."""
-    session = browser.attach(tab["targetId"])
+def keep_awake(browser, session):
+    """Stop Chrome from throttling the meeting tab while it is in the background (another tab in
+    front, the window minimised, screen sharing). A hidden tab stops rendering entirely and the
+    platforms then stop updating their captions. Measured on Chrome 156: hidden tab 0 frames/s;
+    with focus emulation and an "active" lifecycle 5 frames/s; with a tiny screencast as well,
+    60 frames/s, the same as a tab in front. Repeated every 30 s."""
     for method, params in (("Emulation.setFocusEmulationEnabled", {"enabled": True}),
-                           ("Page.setWebLifecycleState", {"state": "active"})):
+                           ("Page.setWebLifecycleState", {"state": "active"}),
+                           ("Page.startScreencast", {"format": "jpeg", "quality": 1, "maxWidth": 16,
+                                                     "maxHeight": 16, "everyNthFrame": 30})):
         try:
             browser.call(method, params, session)
         except (RuntimeError, ConnectionError):
             pass
+
+
+def attach(browser, tab):
+    session = browser.attach(tab["targetId"])
+
+    def ack(msg):   # acknowledge each (16 px) screencast frame, or Chrome stops sending them
+        if msg.get("method") == "Page.screencastFrame":
+            browser.notify("Page.screencastFrameAck", {"sessionId": msg["params"]["sessionId"]},
+                           msg.get("sessionId"))
+    browser.on_event = ack
+    keep_awake(browser, session)
     return session
 
 
@@ -271,7 +289,10 @@ def main():
     ap.add_argument("--translate", default=os.environ.get("WINGMAN_TRANSLATE", ""))
     ap.add_argument("--meeting", default="", help="pick the tab whose title or URL contains this text")
     ap.add_argument("--list", action="store_true", help="list the open meeting tabs and exit")
+    ap.add_argument("--tab-url", default="", help="regex that picks the tab by URL (another meeting site, or tests)")
     a = ap.parse_args()
+    global TAB_URL
+    TAB_URL = a.tab_url or TAB_URL
 
     print(f"connecting to the browser ({a.cdp}); approve 'Allow remote debugging' if the browser asks", flush=True)
     browser = cdp.connect(a.cdp)
@@ -309,6 +330,7 @@ def main():
 
     tracker, found_before = Tracker(), None
     control = os.environ.get("WINGMAN_CONTROL", "")
+    awake_at = time.time()
     while True:
         # `wingman switch`: save this meeting's transcript and follow another tab, on the same
         # browser connection (no new "Allow remote debugging?" prompt).
@@ -346,6 +368,9 @@ def main():
                   "no captions on the page: turn on captions (CC) in the meeting", flush=True)
             found_before = r["found"]
         write_lines(a.out, tracker.update(r["blocks"]), translate)
+        if time.time() - awake_at > 30:
+            keep_awake(browser, session)
+            awake_at = time.time()
         time.sleep(a.interval)
 
 

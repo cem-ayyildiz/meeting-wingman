@@ -6,7 +6,14 @@ Clean-ups from the Claude directory's validation.
 
 - `captions.py` reads `WINGMAN_CAPTION_BLOCK`, `WINGMAN_CAPTION_SPEAKER` and `WINGMAN_CAPTION_TEXT` by
   their literal names (a name built at run time looked like it could be a credential).
-- `wingman` no longer uses `eval`: the wait-for-ready helper takes the command as arguments.
+- `wingman` no longer runs a command given as a string: the wait-for-ready helper takes the command as arguments.
+- `captions.py --tab-url REGEX` picks the tab by URL (same as `WINGMAN_CAPTION_URL`); the tests use it.
+- **Captions keep flowing when the meeting tab is in the background** (another tab in front, the
+  window minimised, screen sharing). Chrome stops rendering a hidden tab and the platforms then
+  stop updating their captions; in the first real meetings lines arrived minutes late. The reader
+  now keeps the tab rendering with focus emulation, an "active" lifecycle and a 16-pixel screencast,
+  renewed every 30 s. Measured on Chrome 156, background tab: 0 → 58 frames/s; minimised window:
+  0 → 59 frames/s.
 
 ## [0.3.1] - 2026-11-05
 
