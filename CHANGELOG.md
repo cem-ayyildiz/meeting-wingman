@@ -12,6 +12,11 @@
   lines. `wingman watch --raw` gives every line.
 - **Cut at pauses**: a voice-activity segmenter replaces the fixed 20-second chunks. A line now
   arrives 1–3 s after the speaker pauses instead of 20–25 s, and silence is never transcribed.
+- **Pick the meeting**: `--app zoom|teams|chrome ...` records only that application's audio
+  (PipeWire; the app keeps playing to the speakers), `--captions --meeting "<title>"` reads one tab
+  when several are open, and `wingman meetings` lists the apps playing audio and the meeting tabs.
+  README has a use-case table (client call, standup, two meetings, late join, switching,
+  translation, interview, webinar, phone dial-in, GPU box).
 - **Microphone recorded by default** together with the system audio (`--no-mic` to leave it out).
 - `wingman doctor` checks the setup; `wingman show N` prints recent lines; `wingman level` measures
   system audio and microphone separately; `wingman stop` waits for the last utterance.

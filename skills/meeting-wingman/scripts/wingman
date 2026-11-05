@@ -8,6 +8,7 @@
 #                              every few minutes (--raw: every line). N = old lines to replay first
 #   wingman show [N]           print the last N transcript lines (default 30)
 #   wingman stop [OUT.txt]     stop, save the transcript to OUT.txt, keep no other copy
+#   wingman meetings           list what can be followed now: apps playing audio, meeting tabs
 #   wingman doctor             check the setup and say what is missing
 #   wingman level [SECONDS]    measure the system audio and microphone levels
 #   wingman status
@@ -20,6 +21,9 @@
 #   -n "names"     the user's name(s), so "Ana, what do you think?" wakes Claude
 #   --captions     read the meeting's own captions from the browser instead of recording audio
 #                  (Meet, Teams or Zoom web client; gives speaker names, needs no GPU)
+#   --meeting TEXT with --captions, the tab whose title or URL contains TEXT (several open)
+#   --app NAME     record only this app's audio, e.g. zoom, teams, chrome (PipeWire; default:
+#                  everything the computer plays)
 #   --cdp main|PORT  browser for --captions (default main = your own Chrome/Edge, asks once)
 #   --no-mic       record only the system audio (when you speak from another device)
 #   --local | --remote HOST   where to transcribe (default: WINGMAN_REMOTE_HOST if set, else here)
@@ -115,20 +119,32 @@ ship() {   # remote mode: send finished utterances (complete files only; .part i
 cmd_capture() {   # internal: started by `start`
   mkdir -p "$SEG"
   rm -f "$SEG"/*.wav "$SEG"/*.part
-  mapfile -t IN < <(audio_input "$(getstate mic)")
-  ffmpeg -nostdin -loglevel error "${IN[@]}" -ac 1 -ar 16000 -f s16le - | "$LPY" "$DIR/segmenter.py" "$SEG" &
-  SG=$!
+  local app mic; app="$(getstate app)"; mic="$(getstate mic)"
+  if [ -n "$app" ]; then
+    # One app only: a recorder that connects to nothing by itself, and applink.py linking the
+    # app's streams (and the microphone) to it. The app still plays to the speakers as before.
+    local rec="wingman-rec-$$"
+    pw-record -P "{ node.name = \"$rec\" node.autoconnect = false }" --rate 16000 --channels 1 --format s16 - 2>/dev/null |
+      "$LPY" "$DIR/segmenter.py" "$SEG" &
+    SG=$!
+    sleep 0.5
+    "$LPY" "$DIR/applink.py" link --app "$app" --rec "$rec" --mic "$mic" &
+  else
+    mapfile -t IN < <(audio_input "$mic")
+    ffmpeg -nostdin -loglevel error "${IN[@]}" -ac 1 -ar 16000 -f s16le - | "$LPY" "$DIR/segmenter.py" "$SEG" &
+    SG=$!
+  fi
   trap 'kill $(jobs -p) 2>/dev/null' EXIT INT TERM
   if [ "$(mode)" = local ]; then wait $SG; exit; fi
   while kill -0 $SG 2>/dev/null; do ship; sleep 1; done
 }
 
-start_captions() {   # $1 lang, $2 xlang, $3 cdp
+start_captions() {   # $1 lang, $2 xlang, $3 cdp, $4 meeting
   mkdir -p "$LOCAL"
   [ -s "$LOCAL/transcript.txt" ] && mv "$LOCAL/transcript.txt" "$LOCAL/transcript-$(date +%Y%m%d-%H%M%S).txt"
   : > "$LOCAL/transcript.txt"
   WINGMAN_LANG="$1" "${DETACH[@]}" "$LPY" "$DIR/captions.py" "$LOCAL/transcript.txt" --cdp "$3" \
-    ${2:+--translate "$2"} > "$LOCAL/server.log" 2>&1 < /dev/null &
+    ${2:+--translate "$2"} ${4:+--meeting "$4"} > "$LOCAL/server.log" 2>&1 < /dev/null &
   echo $! > "$STATE/server.pid"
   echo "Connecting to the browser ($3). If it asks \"Allow remote debugging?\", approve it."
   if ! wait_ready "cat '$LOCAL/server.log'" "captions ready|waiting for a"; then
@@ -136,7 +152,7 @@ start_captions() {   # $1 lang, $2 xlang, $3 cdp
     alive "$STATE/server.pid" && kill "$(cat "$STATE/server.pid")"
     die "could not read captions. Is remote debugging on (chrome://inspect/#remote-debugging), or the browser started with --remote-debugging-port?"
   fi
-  grep -E "captions ready|waiting for a" "$LOCAL/server.log" | tail -1
+  grep -E "captions ready|waiting for a|other meeting tabs" "$LOCAL/server.log"
   echo captions > "$STATE/mode"
 }
 
@@ -181,7 +197,7 @@ start_local() {   # $1 lang, $2 xlang, $3 terms
 }
 
 cmd_start() {
-  local lang="" xlang="" terms="" force_local=0 gmode=both names="${WINGMAN_NAMES:-}" captions=0 cdpt="${WINGMAN_CDP:-main}" nomic=0
+  local lang="" xlang="" terms="" force_local=0 gmode=both names="${WINGMAN_NAMES:-}" captions=0 cdpt="${WINGMAN_CDP:-main}" nomic=0 meeting="" app=""
   while [ $# -gt 0 ]; do
     case "$1" in
       -l) lang="$2"; shift 2 ;;
@@ -192,6 +208,8 @@ cmd_start() {
       -n) names="$2"; shift 2 ;;
       --captions) captions=1; shift ;;
       --cdp) cdpt="$2"; shift 2 ;;
+      --meeting) meeting="$2"; shift 2 ;;
+      --app) app="$2"; shift 2 ;;
       --no-mic) nomic=1; shift ;;
       --local) force_local=1; shift ;;
       --remote) RHOST="$2"; shift 2 ;;
@@ -204,13 +222,17 @@ cmd_start() {
   printf '%s\n%s\n' "$gmode" "$names" > "$STATE/gate"
 
   if [ $captions = 1 ]; then
-    start_captions "$lang" "$xlang" "$cdpt"
+    start_captions "$lang" "$xlang" "$cdpt" "$meeting"
     echo "READY: captions from the browser${xlang:+, translating to $xlang}. Lines arrive about 2 s after each caption settles."
     echo "Watch: wingman watch    Stop: wingman stop <out.txt>"
     return
   fi
 
-  command -v ffmpeg >/dev/null || die "ffmpeg not found"
+  if [ -n "$app" ]; then
+    { command -v pw-record >/dev/null && command -v pw-link >/dev/null; } || die "--app needs PipeWire (pw-record, pw-link). Without it, leave --app out to record all system audio."
+  else
+    command -v ffmpeg >/dev/null || die "ffmpeg not found"
+  fi
   local use_remote=0
   if [ $force_local = 0 ] && [ -n "$RHOST" ]; then
     if timeout 8 ssh -o BatchMode=yes "$RHOST" true 2>/dev/null; then
@@ -225,11 +247,12 @@ cmd_start() {
 
   local mic=""; [ $nomic = 0 ] && mic="$(default_mic)"
   printf '%s' "$mic" > "$STATE/mic"
+  printf '%s' "$app" > "$STATE/app"
   WINGMAN_REMOTE_HOST="$RHOST" "${DETACH[@]}" "$SELF" _capture > "$STATE/capture.log" 2>&1 < /dev/null &
   echo $! > "$STATE/capture.pid"
   sleep 2
   alive "$STATE/capture.pid" || { cat "$STATE/capture.log" >&2; die "audio capture did not start"; }
-  echo "READY: mode $(mode), language ${lang:-auto}${xlang:+, translating to $xlang}, microphone ${mic:-off}."
+  echo "READY: mode $(mode), language ${lang:-auto}${xlang:+, translating to $xlang}, audio from ${app:-everything the computer plays}, microphone ${mic:-off}."
   echo "Lines arrive a few seconds after each pause. Watch: wingman watch    Stop: wingman stop <out.txt>"
 }
 
@@ -305,7 +328,7 @@ cmd_stop() {
       fi
       rm -f "$SEG"/*.wav "$SEG"/*.part ;;
   esac
-  rm -f "$STATE/mode" "$STATE/host" "$STATE/mic" "$STATE/gate"
+  rm -f "$STATE/mode" "$STATE/host" "$STATE/mic" "$STATE/app" "$STATE/gate"
   local n; n=$(wc -l < "$out")
   echo "Transcript: $out ($n lines${n:+, $(head -c 10 "$out") to $(tail -1 "$out" | head -c 10)})"
 }
@@ -392,9 +415,18 @@ cmd_doctor() {
   echo "Disk: $(df -h "${HF_HOME:-$HOME/.cache}" 2>/dev/null | awk 'NR==2{print $4}') free for models (small 0.5 GB, large-v3 3 GB, translation 0.6–1.4 GB)"
 }
 
+cmd_meetings() {   # what could be followed right now
+  echo "Apps playing audio (wingman start --app NAME):"
+  if command -v pw-dump >/dev/null; then "$LPY" "$DIR/applink.py" list | sed 's/^/  /'; else echo "  (needs PipeWire; without it all system audio is recorded)"; fi
+  echo "Meeting tabs in the browser (wingman start --captions --meeting TEXT):"
+  if [ "${1:-}" = --no-browser ]; then echo "  (skipped)"; return; fi
+  echo "  (connecting to ${WINGMAN_CDP:-main}; the browser may ask to allow remote debugging)"
+  timeout 130 "$LPY" "$DIR/captions.py" /dev/null --cdp "${WINGMAN_CDP:-main}" --list 2>&1 | grep -v '^connecting' | sed 's/^/  /'
+}
+
 cmd_status() {
   echo "mode:    $(mode || true)"
-  if [ "$(mode)" != captions ]; then echo "capture: $(alive "$STATE/capture.pid" && echo running || echo stopped)  microphone: $(getstate mic || true)"; fi
+  if [ "$(mode)" != captions ]; then echo "capture: $(alive "$STATE/capture.pid" && echo running || echo stopped)  audio from: $(getstate app || true)  microphone: $(getstate mic || true)"; fi
   case "$(mode)" in
     local|captions) echo "reader:  $(alive "$STATE/server.pid" && echo running || echo stopped)"; tail -1 "$LOCAL/server.log" 2>/dev/null ;;
     remote) echo "host:    $(getstate host)" ;;
@@ -409,6 +441,7 @@ case "${1:-help}" in
   show) shift; cmd_show "$@" ;;
   stop) shift; cmd_stop "$@" ;;
   doctor) cmd_doctor ;;
+  meetings) shift; cmd_meetings "$@" ;;
   level) shift; cmd_level "$@" ;;
   status) cmd_status ;;
   _capture) cmd_capture ;;

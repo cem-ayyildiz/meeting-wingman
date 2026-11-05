@@ -52,6 +52,28 @@ Say it in your own words; these are the kinds of requests the skill is built for
    line."* Claude starts with `-l ja -x en` and the English line appears under each Japanese one.
 4. *"The meeting is over. Save the transcript to `meetings/` and list what we promised to send."*
 
+## Use cases
+
+Tell Claude which meeting and what you need; it picks the source, the mode and the target, and
+starts in a few seconds, also when the meeting is already running.
+
+| Situation | Say to Claude | What it runs |
+|---|---|---|
+| Investor or client call in the **Zoom desktop app** | *"Help me answer questions in this Zoom call; my numbers are in `notes/q3.md`."* | `wingman start -m coach --app zoom -n Ana` |
+| **Daily standup in Google Meet** (browser), tasks in ClickUp | *"Follow the standup in Meet and put action items into Sprint 42. Ask before creating."* | `wingman start -m team --captions -n Ana` |
+| **Two meetings open** (one on hold, back-to-back calls) | *"Follow the one called Weekly sync, not the other."* | `wingman meetings`, then `--captions --meeting "Weekly sync"` or `--app teams` |
+| **Already in the meeting**, ten minutes late | *"Start now."* | Starts at once; with captions it also picks up what is still on screen |
+| **Switch** to the next call | *"Switch to the Teams call."* | `wingman stop` (saves this one), `wingman start --app teams ...` |
+| Meeting in a **language you don't speak** | *"This call is in Japanese, translate everything to English."* | `wingman start -l ja -x en` |
+| **Job interview** as the candidate | *"Coach me through this interview; here is the job post and my CV."* | Prep notes from both, then `-m coach` |
+| **Webinar or all-hands**, listening only | *"Listen and give me the decisions and anything about our team."* | `-m team -n "Ana, Platform team"`, summary at the end |
+| You **dial in by phone**, the laptop only listens | *"I'm on the phone, the laptop is just in the call."* | adds `--no-mic` |
+| Laptop without a GPU, a **GPU box** at home or work | (configured once) | `WINGMAN_REMOTE_HOST=gpu-box`; falls back to the laptop CPU if the box is busy |
+| Something else is playing (music, a video) | *"Only listen to Teams."* | `--app teams` records just that app (PipeWire) |
+
+`wingman meetings` lists what can be followed right now: the apps playing audio and the Meet,
+Teams and Zoom tabs open in the browser.
+
 ## Coach mode
 
 For meetings where you have to answer: clients, interviews, reviews, investors. A local filter
@@ -229,6 +251,8 @@ Nothing is required. To change the defaults, put `KEY=value` lines in
 | `WINGMAN_MIC` | `auto` | `auto` (the default microphone), `none`, or a source name. A Bluetooth headset switches to headset mode when its microphone opens; in a call the app already does this |
 | `WINGMAN_DIGEST` | `300` | Seconds between digests of lines that woke nobody |
 | `WINGMAN_NAMES` | (none) | Your name(s), so "Ana, what do you think?" wakes Claude (same as `-n`) |
+| (option) `--app NAME` | everything | Record only one application's audio, matched by name: `zoom`, `teams`, `chrome`, `firefox`. Needs PipeWire; the app keeps playing to your speakers |
+| (option) `--meeting TEXT` | the tab showing captions | With `--captions`, the tab whose title or URL contains TEXT |
 | `WINGMAN_CDP` | `main` | Browser for `--captions`: `main` (your own, via its DevToolsActivePort) or a debugging port |
 
 </details>
@@ -252,8 +276,11 @@ Claude runs it for you. You can also run it yourself
 
 ```bash
 wingman doctor                                          # check the setup once
+wingman meetings                                        # apps playing audio, meeting tabs open
+wingman start -m coach --app zoom                       # only the Zoom app's audio
 wingman start -m coach -n Ana -l en -t "Acme, SOC 2"   # audio, wake on questions, your name, numbers
 wingman start -m team -n Ana --captions                 # captions from the browser tab
+wingman start --captions --meeting "Weekly sync"        # that tab, when several are open
 wingman start -l ja -x en                               # Japanese call, English under each line
 wingman watch                                           # events for Claude (--raw: every line)
 wingman show 60                                         # the last 60 lines
@@ -282,7 +309,7 @@ Everything the plugin does is in readable bash and Python in
 
 | | |
 |---|---|
-| **Runs** | `ffmpeg` to record the system audio and microphone, `python3` with faster-whisper (and CTranslate2 for translation) to transcribe, `rsync` and `ssh` only in remote mode. With `--captions`: a DevTools connection to your own browser on `127.0.0.1`, which lists the open tabs to find the meeting and then reads only the caption text of that tab |
+| **Runs** | `ffmpeg` (or, with `--app`, PipeWire's `pw-record` and `pw-link`) to record the system audio and microphone, `python3` with faster-whisper (and CTranslate2 for translation) to transcribe, `rsync` and `ssh` only in remote mode. With `--captions`: a DevTools connection to your own browser on `127.0.0.1`, which lists the open tabs to find the meeting and then reads only the caption text of that tab |
 | **Sends** | Audio chunks only to the SSH host you configure in `WINGMAN_REMOTE_HOST`, and only if you configure one. Tasks and comments only to the tracker you connected yourself, in team mode, with your confirmation unless you chose `auto`. Transcript lines are read by Claude Code like any other text in your session |
 | **Fetches** | The faster-whisper speech model and, with `-x`, the NLLB-200 translation model, from the Hugging Face Hub on first use |
 | **Keeps** | Audio chunks for a few seconds, until they are transcribed. The transcript only at the path you give `wingman stop`; no copy is left in the state folder or on the remote host |

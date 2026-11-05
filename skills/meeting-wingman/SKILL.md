@@ -61,7 +61,23 @@ There are two modes. Ask which one, or infer it from the request; both can run a
    asked, give **one screen** of "three things to remember".
 7. **Team mode:** see §3a.
 
-## 1. Start
+## 1. Pick the meeting, then start
+
+Start as soon as the user asks, also when the meeting is already running; preparation can
+happen while it runs. Map what the user says to a target:
+
+| User says | Target |
+|---|---|
+| "the Zoom call", "Teams", "the one in Chrome" (a desktop app or one browser) | audio with `--app zoom` / `--app teams` / `--app chrome` |
+| "the Meet", a meeting title or code, and the meeting is in the browser | `--captions` (add `--meeting "<title or code>"` if several are open) |
+| nothing specific, one meeting running | audio from everything (default), or captions if a meeting tab is open |
+| unclear, or several meetings | run `wingman meetings` and ask which one, naming what it lists |
+| "switch to the other call" | `wingman stop <file for this one>`, then `wingman start` with the new target |
+
+`--app` needs PipeWire (most current Linux desktops); `wingman meetings` shows the app names that
+are playing audio. Captions need the meeting in the browser with captions turned on.
+
+### Start
 
 ```
 wingman start -m coach -n "Ana" -l en -t "Acme, Project Falcon, SOC 2, ..."   # client call, audio
@@ -206,6 +222,8 @@ Ask where to save it if the project has no obvious place.
 | `wingman start` prints an SSH warning | Key not in the agent: the user runs `ssh-add`. See §1 |
 | First run on a machine | `wingman doctor`: ffmpeg, faster-whisper, GPU, audio levels, microphone, SSH host, browser debugging |
 | `--captions` fails to connect | Remote debugging is off (`chrome://inspect/#remote-debugging`), or the user did not click Allow. Each `wingman start --captions` asks once |
+| `--app` records nothing | The app has not played sound yet, or its name differs: `wingman meetings` lists the names; the match is a case-insensitive regex |
+| `--captions` reads the wrong meeting | Several meeting tabs are open: `--meeting "<title or code>"` |
 | `--captions` says no captions on the page | Captions (CC) are off in the meeting, or the meeting runs in the desktop app; use the audio source instead |
 | A Bluetooth headset sounds worse after start | Opening its microphone switches it to headset mode. In a call the app already does this; otherwise use `--no-mic` |
 | `READY` says `cpu` although there is a GPU | GPU busy or out of memory; it fell back on purpose. `nvidia-smi` shows who holds it |

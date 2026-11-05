@@ -21,6 +21,7 @@ Thanks for helping. The most useful contributions right now:
 | `skills/meeting-wingman/scripts/transcribe_server.py` | The faster-whisper transcriber |
 | `skills/meeting-wingman/scripts/segmenter.py` | Cuts audio at pauses (standard library only) |
 | `skills/meeting-wingman/scripts/gate.py` | Decides which lines wake Claude (standard library only) |
+| `skills/meeting-wingman/scripts/applink.py` | Links one app's audio to the recorder on PipeWire (`--app`) |
 | `skills/meeting-wingman/scripts/captions.py`, `cdp.py` | Reads Meet/Teams/Zoom captions from the browser |
 | `tests/` | Unit tests and a mock Meet page |
 | `skills/meeting-wingman/templates/prep-notes.md` | Prep document template |

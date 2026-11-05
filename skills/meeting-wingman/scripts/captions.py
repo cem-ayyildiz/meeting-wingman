@@ -11,6 +11,8 @@ audio is recorded and no GPU is needed. Each finished caption becomes a transcri
   --cdp main   the user's own browser (Chrome asks "Allow remote debugging?" once). Needs remote
                debugging turned on at chrome://inspect/#remote-debugging
   --cdp PORT   a browser started with --remote-debugging-port=PORT
+  --meeting T  read the tab whose title or URL contains T (several meetings open)
+  --list       list the meeting tabs that are open and exit
 
 Custom DOM selectors, if a platform changes its page: WINGMAN_CAPTION_BLOCK (one caption block),
 WINGMAN_CAPTION_SPEAKER and WINGMAN_CAPTION_TEXT (inside a block). WINGMAN_CAPTION_URL: a regex that
@@ -150,15 +152,38 @@ class Tracker:
         return stamp, s["speaker"], text
 
 
-def find_tab(browser, platform):
+def meeting_tabs(browser, platform="auto"):
+    """All open tabs that look like a meeting: [(platform, tab)]."""
     custom = os.environ.get("WINGMAN_CAPTION_URL")    # regex for another meeting site, or for tests
+    out = []
     for p in browser.pages():
-        if custom and re.search(custom, p.get("url", "")):
-            return (platform if platform != "auto" else "meet"), p
+        url = p.get("url", "")
+        if custom and re.search(custom, url):
+            out.append((platform if platform != "auto" else "meet", p))
+            continue
         for name, rx in PLATFORMS.items():
-            if (platform in ("auto", name)) and rx.match(p.get("url", "")):
-                return name, p
-    return None, None
+            if platform in ("auto", name) and rx.match(url):
+                out.append((name, p))
+    return out
+
+
+def find_tab(browser, platform, meeting=""):
+    """Pick the meeting tab: the one matching `meeting` (title or URL), else the one showing captions."""
+    tabs = meeting_tabs(browser, platform)
+    if meeting:
+        m = meeting.casefold()
+        tabs = [t for t in tabs if m in t[1].get("title", "").casefold() or m in t[1].get("url", "").casefold()]
+    if len(tabs) <= 1:
+        return tabs[0] if tabs else (None, None)
+    for name, tab in tabs:          # several: prefer the one that already shows captions
+        try:
+            s = browser.attach(tab["targetId"])
+            r = browser.evaluate(s, EXTRACT % {"platform": json.dumps(name), "custom": json.dumps({})}) or {}
+            if r.get("found"):
+                return name, tab
+        except (RuntimeError, ConnectionError):
+            pass
+    return tabs[0]
 
 
 def main():
@@ -168,10 +193,19 @@ def main():
     ap.add_argument("--platform", default="auto", choices=["auto", *PLATFORMS])
     ap.add_argument("--interval", type=float, default=1.0)
     ap.add_argument("--translate", default=os.environ.get("WINGMAN_TRANSLATE", ""))
+    ap.add_argument("--meeting", default="", help="pick the tab whose title or URL contains this text")
+    ap.add_argument("--list", action="store_true", help="list the open meeting tabs and exit")
     a = ap.parse_args()
 
     print(f"connecting to the browser ({a.cdp}); approve 'Allow remote debugging' if the browser asks", flush=True)
     browser = cdp.connect(a.cdp)
+    if a.list:
+        tabs = meeting_tabs(browser, a.platform)
+        if not tabs:
+            print("no Meet, Teams or Zoom tab is open in this browser")
+        for name, t in tabs:
+            print(f"{name:6} {t.get('title', '')[:60]:60} {t.get('url', '')[:70]}")
+        return
     translate = None
     if a.translate:
         from translate import Translator
@@ -179,12 +213,16 @@ def main():
 
     platform, tab, said = None, None, set()
     while tab is None:
-        platform, tab = find_tab(browser, a.platform)
+        platform, tab = find_tab(browser, a.platform, a.meeting)
         if tab is None:
             if "wait" not in said:
-                print("waiting for a Google Meet, Microsoft Teams or Zoom tab (web client) to open", flush=True)
+                what = f'a meeting tab matching "{a.meeting}"' if a.meeting else "a Google Meet, Microsoft Teams or Zoom tab (web client)"
+                print(f"waiting for {what} to open", flush=True)
                 said.add("wait")
             time.sleep(3)
+    others = [t for _, t in meeting_tabs(browser, a.platform) if t["targetId"] != tab["targetId"]]
+    if others:
+        print("other meeting tabs (not read): " + "; ".join(t.get("title", "")[:40] for t in others), flush=True)
     session = browser.attach(tab["targetId"])
     custom = {k: os.environ.get(f"WINGMAN_CAPTION_{k.upper()}", "") for k in ("block", "speaker", "text")}
     expr = EXTRACT % {"platform": json.dumps(platform), "custom": json.dumps(custom)}
@@ -198,7 +236,7 @@ def main():
         except (RuntimeError, ConnectionError) as e:
             print(f"lost the tab ({e}); waiting for it again", flush=True)
             time.sleep(3)
-            platform, tab = find_tab(browser, a.platform)
+            platform, tab = find_tab(browser, a.platform, a.meeting)
             if tab:
                 session = browser.attach(tab["targetId"])
             continue
