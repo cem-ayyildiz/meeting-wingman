@@ -62,6 +62,9 @@ class MockMeetInBrowser(unittest.TestCase):
     """End to end: headless Chrome shows tests/fixtures/meet-mock.html, captions.py reads it."""
 
     def test_reads_mock_meet(self):
+        import json
+        import urllib.request
+        import cdp
         here = os.path.dirname(os.path.abspath(__file__))
         with socket.socket() as s:
             s.bind(("127.0.0.1", 0))
@@ -69,23 +72,40 @@ class MockMeetInBrowser(unittest.TestCase):
         prof = tempfile.mkdtemp()
         page = "file://" + os.path.join(here, "fixtures", "meet-mock.html")
         br = subprocess.Popen([chrome(), "--headless=new", f"--remote-debugging-port={port}", f"--user-data-dir={prof}",
-                               "--no-first-run", "--no-sandbox", page], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        out = os.path.join(prof, "t.txt")
+                               "--no-first-run", "--no-sandbox", "--disable-gpu", "about:blank"],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        out, log = os.path.join(prof, "t.txt"), os.path.join(prof, "captions.log")
+        cap = None
         try:
-            time.sleep(3)
+            for _ in range(60):     # wait until the debugging port answers
+                try:
+                    urllib.request.urlopen(f"http://127.0.0.1:{port}/json/version", timeout=1).read()
+                    break
+                except OSError:
+                    time.sleep(0.5)
             env = dict(os.environ, WINGMAN_CAPTION_URL="meet-mock")
             cap = subprocess.Popen(["python3", os.path.join(_path.SCRIPTS, "captions.py"), out, "--cdp", str(port),
-                                    "--interval", "0.4"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            time.sleep(14)
-            cap.terminate()
-            lines = open(out).read().splitlines() if os.path.exists(out) else []
+                                    "--interval", "0.4"], env=env, stdout=open(log, "w"), stderr=subprocess.STDOUT)
+            time.sleep(2)
+            # open the mock meeting only now, so the reader sees it from the first caption
+            b = cdp.connect(str(port))
+            tab = b.pages()[0]
+            b.call("Page.navigate", {"url": page}, b.attach(tab["targetId"]))
+            for _ in range(40):
+                time.sleep(0.5)
+                if os.path.exists(out) and "Nothing was lost." in open(out).read():
+                    break
+            time.sleep(1)
         finally:
+            if cap:
+                cap.terminate()
             br.terminate()
-        text = "\n".join(lines)
-        self.assertIn("Maria: Good morning everyone, let's start with the pilot results.", text)
-        self.assertIn("You: What happens to the data when a site goes offline?", text)
-        self.assertIn("Nothing was lost.", text)
-        self.assertEqual(text.count("Good morning everyone"), 1)
+        text = open(out).read() if os.path.exists(out) else ""
+        msg = "captions.py log:\n" + (open(log).read() if os.path.exists(log) else "(none)") + "\ntranscript:\n" + text
+        self.assertIn("Maria: Good morning everyone, let's start with the pilot results.", text, msg)
+        self.assertIn("You: What happens to the data when a site goes offline?", text, msg)
+        self.assertIn("Nothing was lost.", text, msg)
+        self.assertEqual(text.count("Good morning everyone"), 1, msg)
 
 
 if __name__ == "__main__":
