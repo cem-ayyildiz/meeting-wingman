@@ -300,7 +300,9 @@ def main():
     if others:
         print("other meeting tabs (not read): " + "; ".join(t.get("title", "")[:40] for t in others), flush=True)
     session = attach(browser, tab)
-    custom = {k: os.environ.get(f"WINGMAN_CAPTION_{k.upper()}", "") for k in ("block", "speaker", "text")}
+    custom = {"block": os.environ.get("WINGMAN_CAPTION_BLOCK", ""),
+              "speaker": os.environ.get("WINGMAN_CAPTION_SPEAKER", ""),
+              "text": os.environ.get("WINGMAN_CAPTION_TEXT", "")}
     expr = EXTRACT % {"platform": json.dumps(platform), "custom": json.dumps(custom)}
     print(f"captions ready ({platform}: {tab.get('title', '')[:60]}"
           + (f", translate to {translate.target} on {translate.device}" if translate else "") + ")", flush=True)

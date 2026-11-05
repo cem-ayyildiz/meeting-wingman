@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.2] - 2026-11-05
+
+Clean-ups from the Claude directory's validation.
+
+- `captions.py` reads `WINGMAN_CAPTION_BLOCK`, `WINGMAN_CAPTION_SPEAKER` and `WINGMAN_CAPTION_TEXT` by
+  their literal names (a name built at run time looked like it could be a credential).
+- `wingman` no longer uses `eval`: the wait-for-ready helper takes the command as arguments.
+
 ## [0.3.1] - 2026-11-05
 
 Fixes from the first real meetings (Meet and Teams team syncs, a Zoom test call).

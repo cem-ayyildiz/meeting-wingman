@@ -101,11 +101,11 @@ audio_input() {   # $1 = microphone source or empty. Prints ffmpeg input argumen
   true
 }
 
-wait_ready() {   # $1 = command printing the log, $2 = regex for ready. Fails fast on a crash.
-  local log
+wait_ready() {   # $1 = regex for ready, then the command (as arguments) that prints the log. Fails fast on a crash.
+  local rx="$1" log; shift
   for _ in $(seq 1 100); do
-    log="$(eval "$1" 2>/dev/null)"
-    grep -qE "$2" <<<"$log" && return 0
+    log="$("$@" 2>/dev/null)"
+    grep -qE "$rx" <<<"$log" && return 0
     grep -qE "^Traceback|no device worked|^ERROR" <<<"$log" && return 1
     sleep 2
   done
@@ -150,7 +150,7 @@ start_captions() {   # $1 lang, $2 xlang, $3 cdp, $4 meeting
     ${2:+--translate "$2"} ${4:+--meeting "$4"} > "$LOCAL/server.log" 2>&1 < /dev/null &
   echo $! > "$STATE/server.pid"
   echo "Connecting to the browser ($3). If it asks \"Allow remote debugging?\", approve it."
-  if ! wait_ready "cat '$LOCAL/server.log'" "captions ready|waiting for a"; then
+  if ! wait_ready "captions ready|waiting for a" cat "$LOCAL/server.log"; then
     tail -5 "$LOCAL/server.log" >&2
     alive "$STATE/server.pid" && kill "$(cat "$STATE/server.pid")"
     die "could not read captions. Is remote debugging on (chrome://inspect/#remote-debugging), or the browser started with --remote-debugging-port?"
@@ -171,7 +171,7 @@ start_remote() {   # $1 lang, $2 xlang, $3 terms. Returns 1 to fall back to loca
   # "cd X && cmd &" would background the whole list in a subshell and $! would be that subshell.
   timeout 20 ssh -n -f "$RHOST" "cd $RDIR || exit 1; WINGMAN_DIR=. WINGMAN_LANG='$1' WINGMAN_TRANSLATE='$2' WINGMAN_TRANSLATE_MODEL='${WINGMAN_TRANSLATE_MODEL:-}' WINGMAN_MODEL='${WINGMAN_MODEL:-}' WINGMAN_DEVICE='${WINGMAN_DEVICE:-auto}' setsid nohup $RPY transcribe_server.py > server.log 2>&1 < /dev/null & echo \$! > server.pid"
   echo "Loading the model on $RHOST (the first run downloads it)..."
-  if wait_ready "ssh $RHOST 'cat $RDIR/server.log'" "model ready"; then
+  if wait_ready "model ready" ssh "$RHOST" "cat $RDIR/server.log"; then
     ssh "$RHOST" "grep 'model ready' $RDIR/server.log"
     echo remote > "$STATE/mode"
     echo "$RHOST" > "$STATE/host"
@@ -194,7 +194,7 @@ start_local() {   # $1 lang, $2 xlang, $3 terms
     "${DETACH[@]}" "$LPY" "$DIR/transcribe_server.py" > "$LOCAL/server.log" 2>&1 < /dev/null &
   echo $! > "$STATE/server.pid"
   echo "Loading the model locally (the first run downloads it)..."
-  wait_ready "cat '$LOCAL/server.log'" "model ready" || { tail -20 "$LOCAL/server.log" >&2; die "local server did not become ready"; }
+  wait_ready "model ready" cat "$LOCAL/server.log" || { tail -20 "$LOCAL/server.log" >&2; die "local server did not become ready"; }
   grep 'model ready' "$LOCAL/server.log"
   echo local > "$STATE/mode"
 }
