@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.0] - 2026-11-05
+
+- **Team mode**: action items and decisions heard in the meeting become new tasks or comments on
+  existing tasks in the connected tracker (ClickUp, Linear, Jira, GitHub Issues, Asana ...), with
+  `confirm`, `auto` or `end` write policies, owner matching and duplicate checks.
+- **Translation**: `wingman start -x <language>` adds a translated line under each line, using a
+  local NLLB-200 model through CTranslate2 (no new dependencies).
+- **GPU to CPU fallback** inside the transcriber and the translator: a missing, busy or
+  out-of-memory GPU no longer stops the start, it loads on the CPU and says so.
+- README: coach and team modes, Meet/Teams/Zoom support, translation.
+
 ## [0.1.1] - 2026-11-05
 
 - README rewritten: demo image, pipeline diagram, limits, troubleshooting.
@@ -7,14 +18,14 @@
 
 ## [0.1.0] - 2026-11-05
 
-First public release, generalised from a private tool used in real review meetings.
+First public release.
 
 - `wingman` command: `start`, `watch`, `stop`, `level`, `status`.
 - Local transcription by default (`large-v3` on GPU, `small` on CPU); optional remote GPU over SSH.
 - Falls back to local transcription when SSH fails or the remote model does not load.
 - Linux capture through PulseAudio/PipeWire; macOS through a loopback device (beta).
 
-Lessons from those meetings that are built in:
+Lessons that are built in:
 
 - Whisper invents sentences during silence ("Thank you for watching", subtitle credits, the hint
   list read back). The server filters them; Turkish `İ`/`ı` are normalised before matching.

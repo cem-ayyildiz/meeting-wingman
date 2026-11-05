@@ -4,7 +4,7 @@
 # meeting-wingman: live transcription of whatever the computer plays (the meeting app),
 # streamed into a Claude Code session.
 #
-#   wingman start [-l LANG] [-t "term, term"] [-T terms.txt] [--local | --remote HOST]
+#   wingman start [-l LANG] [-x LANG] [-t "term, term"] [-T terms.txt] [--local | --remote HOST]
 #   wingman watch [N]          print new transcript lines (what Claude's Monitor runs);
 #                              N = old lines to show first
 #   wingman stop [OUT.txt]     stop everything, save the transcript to OUT.txt
@@ -12,6 +12,7 @@
 #   wingman status
 #
 #   -l   language code: tr, en, de ... or "auto" (default: auto)
+#   -x   also translate every line into this language (de, tr, en ...), on GPU or CPU
 #   -t   recognition hints: names, product names, acronyms (comma separated)
 #   -T   the same, from a file
 #
@@ -21,7 +22,8 @@
 #   WINGMAN_REMOTE_DIR     working directory on that host            (default: .meeting-wingman)
 #   WINGMAN_PYTHON         local python with faster-whisper          (default: python3)
 #   WINGMAN_MODEL          faster-whisper model (default: large-v3 on GPU, small on CPU)
-#   WINGMAN_DEVICE         cuda | cpu | auto                         (default: auto)
+#   WINGMAN_DEVICE         cuda | cpu | auto; auto = GPU if usable, else CPU (default: auto)
+#   WINGMAN_TRANSLATE_MODEL  CTranslate2 NLLB model for -x (default: 1.3B on GPU, 600M on CPU)
 #   WINGMAN_CHUNK          seconds per chunk                         (default: 20)
 #   WINGMAN_AUDIO_SOURCE   capture source. Linux: a PulseAudio/PipeWire source
 #                          (default @DEFAULT_MONITOR@ = what the speakers play).
@@ -69,7 +71,7 @@ wait_ready() {   # $1 = command that prints the server log. Fails fast when the 
   for _ in $(seq 1 100); do
     log="$(eval "$1" 2>/dev/null)"
     grep -q "model ready" <<<"$log" && return 0
-    grep -qE "^Traceback|Error" <<<"$log" && return 1
+    grep -qE "^Traceback|no device worked" <<<"$log" && return 1
     sleep 3
   done
   return 1
@@ -95,10 +97,11 @@ cmd_capture() {   # internal: started by `start`
 }
 
 cmd_start() {
-  local lang="" terms="" force_local=0
+  local lang="" xlang="" terms="" force_local=0
   while [ $# -gt 0 ]; do
     case "$1" in
       -l) lang="$2"; shift 2 ;;
+      -x) xlang="$2"; shift 2 ;;
       -t) terms="$2"; shift 2 ;;
       -T) terms="$(cat "$2")"; shift 2 ;;
       --local) force_local=1; shift ;;
@@ -123,14 +126,14 @@ cmd_start() {
   if [ $use_remote = 1 ]; then
     command -v rsync >/dev/null || die "rsync not found"
     ssh "$RHOST" "mkdir -p $RDIR/in"
-    scp -q "$DIR/transcribe_server.py" "$RHOST:$RDIR/transcribe_server.py"
+    scp -q "$DIR/transcribe_server.py" "$DIR/translate.py" "$RHOST:$RDIR/"
     printf '%s' "$terms" | ssh "$RHOST" "cat > $RDIR/terms.txt"
     # Stop an old server by its PID file. Never `pkill -f` over ssh: the remote shell's own
     # command line matches the pattern and the shell kills itself.
     ssh "$RHOST" "cd $RDIR && [ -f server.pid ] && kill \$(cat server.pid) 2>/dev/null; rm -f server.pid in/*.wav; [ -s transcript.txt ] && mv transcript.txt transcript-\$(date +%Y%m%d-%H%M%S).txt; : > transcript.txt"
     sleep 1
     # "cd X && cmd &" would background the whole list in a subshell and $! would be that subshell.
-    timeout 20 ssh -n -f "$RHOST" "cd $RDIR || exit 1; WINGMAN_DIR=. WINGMAN_LANG='$lang' WINGMAN_MODEL='${WINGMAN_MODEL:-}' WINGMAN_DEVICE='${WINGMAN_DEVICE:-auto}' setsid nohup $RPY transcribe_server.py > server.log 2>&1 < /dev/null & echo \$! > server.pid"
+    timeout 20 ssh -n -f "$RHOST" "cd $RDIR || exit 1; WINGMAN_DIR=. WINGMAN_LANG='$lang' WINGMAN_TRANSLATE='$xlang' WINGMAN_TRANSLATE_MODEL='${WINGMAN_TRANSLATE_MODEL:-}' WINGMAN_MODEL='${WINGMAN_MODEL:-}' WINGMAN_DEVICE='${WINGMAN_DEVICE:-auto}' setsid nohup $RPY transcribe_server.py > server.log 2>&1 < /dev/null & echo \$! > server.pid"
     echo "Loading model on $RHOST (first run downloads it)..."
     if wait_ready "ssh $RHOST 'cat $RDIR/server.log'"; then
       ssh "$RHOST" "head -1 $RDIR/server.log"
@@ -152,7 +155,7 @@ cmd_start() {
     printf '%s' "$terms" > "$LOCAL/terms.txt"
     [ -s "$LOCAL/transcript.txt" ] && mv "$LOCAL/transcript.txt" "$LOCAL/transcript-$(date +%Y%m%d-%H%M%S).txt"
     : > "$LOCAL/transcript.txt"
-    WINGMAN_DIR="$LOCAL" WINGMAN_IN="$SEG" WINGMAN_SKIP_LAST=1 WINGMAN_LANG="$lang" WINGMAN_MODEL="$lmodel" \
+    WINGMAN_DIR="$LOCAL" WINGMAN_IN="$SEG" WINGMAN_SKIP_LAST=1 WINGMAN_LANG="$lang" WINGMAN_TRANSLATE="$xlang" WINGMAN_MODEL="$lmodel" \
       "${DETACH[@]}" "$LPY" "$DIR/transcribe_server.py" > "$LOCAL/server.log" 2>&1 < /dev/null &
     echo $! > "$STATE/server.pid"
     echo "Loading model locally (first run downloads it)..."
@@ -165,7 +168,7 @@ cmd_start() {
   echo $! > "$STATE/capture.pid"
   sleep 3
   alive "$STATE/capture.pid" || { cat "$STATE/capture.log" >&2; die "audio capture did not start"; }
-  echo "READY: mode $(mode), language ${lang:-auto}. Lines arrive about $((CHUNK + 5)) s after speech."
+  echo "READY: mode $(mode), language ${lang:-auto}${xlang:+, translating to $xlang}. Lines arrive about $((CHUNK + 5)) s after speech."
   echo "Watch: wingman watch    Stop: wingman stop <out.txt>"
 }
 

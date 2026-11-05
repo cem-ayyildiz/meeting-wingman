@@ -1,7 +1,7 @@
 {
   "name": "meeting-wingman",
-  "version": "0.1.1",
-  "description": "Live meeting coach for Claude Code: transcribes what your computer plays with faster-whisper and suggests short answers when a question comes up.",
+  "version": "0.2.0",
+  "description": "Live wingman for Meet, Teams and Zoom calls: transcribes (and translates) the meeting on GPU or CPU, suggests answers to questions, and turns action items into tasks and comments in your tracker.",
   "author": {
     "name": "Cem Ayyildiz",
     "url": "https://github.com/cem-ayyildiz"
@@ -9,5 +9,16 @@
   "homepage": "https://github.com/cem-ayyildiz/meeting-wingman",
   "repository": "https://github.com/cem-ayyildiz/meeting-wingman",
   "license": "MIT",
-  "keywords": ["meeting", "transcription", "whisper", "coaching", "live", "interview"]
+  "keywords": [
+    "meeting",
+    "google-meet",
+    "microsoft-teams",
+    "zoom",
+    "transcription",
+    "translation",
+    "whisper",
+    "coaching",
+    "action-items",
+    "clickup"
+  ]
 }

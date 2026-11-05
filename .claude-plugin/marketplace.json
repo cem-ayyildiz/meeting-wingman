@@ -1,6 +1,6 @@
 {
   "name": "meeting-wingman",
-  "description": "Live meeting coach for Claude Code.",
+  "description": "Live meeting wingman for Claude Code.",
   "owner": {
     "name": "Cem Ayyildiz",
     "url": "https://github.com/cem-ayyildiz"
@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "meeting-wingman",
-      "description": "Transcribes what your computer plays during an online meeting and suggests short answers when a question comes up.",
+      "description": "Transcribes and translates your Meet, Teams or Zoom call, suggests answers to questions, and turns action items into tasks in your tracker.",
       "source": "./",
       "category": "productivity"
     }

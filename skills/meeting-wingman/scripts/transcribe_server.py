@@ -12,12 +12,15 @@ Settings come from environment variables:
   WINGMAN_LANG       language code (tr, en, de ...) or empty for auto-detect
   WINGMAN_MODEL      faster-whisper model                 (default: large-v3 on GPU, small on CPU)
   WINGMAN_DEVICE     cuda | cpu | auto                    (default: auto)
+  WINGMAN_TRANSLATE  target language (de, tr, en ...): add a translated line under each line
   WINGMAN_SKIP_LAST  1 = ignore the newest chunk (it is still being written; needed when
                      the server reads the capture directory directly, i.e. local mode)
 
+If the GPU cannot be used (no CUDA, out of memory), the model is loaded on the CPU instead.
 Recognition hints (names, acronyms) are read from $WINGMAN_DIR/terms.txt, comma separated.
 """
 import glob
+import sys
 import os
 import re
 import time
@@ -33,19 +36,15 @@ SKIP_LAST = os.environ.get("WINGMAN_SKIP_LAST") == "1"
 os.makedirs(IN, exist_ok=True)
 
 
-def pick_device():
-    dev = os.environ.get("WINGMAN_DEVICE", "auto")
-    if dev != "auto":
-        return dev
+def has_cuda():
     try:
         import ctranslate2
-        return "cuda" if ctranslate2.get_cuda_device_count() > 0 else "cpu"
+        return ctranslate2.get_cuda_device_count() > 0
     except Exception:
-        return "cpu"
+        return False
 
 
-DEVICE = pick_device()
-MODEL = os.environ.get("WINGMAN_MODEL") or ("large-v3" if DEVICE == "cuda" else "small")
+WANT = os.environ.get("WINGMAN_DEVICE", "auto")
 
 TERMS = ""
 _tf = os.path.join(BASE, "terms.txt")
@@ -87,9 +86,29 @@ def is_hallucination(text):
     return False
 
 
-model = WhisperModel(MODEL, device=DEVICE,
-                     compute_type="float16" if DEVICE == "cuda" else "int8")
-print(f"model ready ({MODEL}, {DEVICE}, language={LANG or 'auto'})", flush=True)
+def load_model():
+    """GPU first (large-v3), CPU (small) when CUDA is missing or the GPU is out of memory."""
+    order = ["cuda", "cpu"] if (WANT == "cuda" or (WANT == "auto" and has_cuda())) else ["cpu"]
+    for dev in order:
+        name = os.environ.get("WINGMAN_MODEL") or ("large-v3" if dev == "cuda" else "small")
+        if dev == "cpu" and len(order) > 1 and os.environ.get("WINGMAN_MODEL"):
+            name = "small"   # a GPU-sized model would not keep up on the CPU
+        try:
+            m = WhisperModel(name, device=dev, compute_type="float16" if dev == "cuda" else "int8")
+            return m, name, dev
+        except Exception as e:
+            print(f"whisper: {name} on {dev} failed: {e}", flush=True)
+    raise SystemExit("whisper: no device worked")
+
+
+model, MODEL, DEVICE = load_model()
+translate = None
+if os.environ.get("WINGMAN_TRANSLATE"):
+    from translate import Translator
+    translate = Translator(os.environ["WINGMAN_TRANSLATE"])
+print(f"model ready ({MODEL}, {DEVICE}, language={LANG or 'auto'}"
+      + (f", translate to {translate.target} with {translate.name} on {translate.device}" if translate else "")
+      + ")", flush=True)
 
 previous = ""
 while True:
@@ -105,16 +124,25 @@ while True:
         try:
             # condition_on_previous_text=False: with it on, muffled audio made the model repeat
             # the previous sentence for minutes.
-            segs, _ = model.transcribe(f, language=LANG, beam_size=5 if DEVICE == "cuda" else 1,
+            segs, info = model.transcribe(f, language=LANG, beam_size=5 if DEVICE == "cuda" else 1,
                                        vad_filter=True, initial_prompt=TERMS or None,
                                        condition_on_previous_text=False)
             text = " ".join(s.text.strip() for s in segs
                             if s.no_speech_prob < 0.6 and not is_hallucination(s.text)).strip()
+            spoken = LANG or info.language
         except Exception as e:  # broken chunk: drop it, keep going
             print(f"{name}: {e}", flush=True)
             text = ""
         if text and text != previous:
+            line = f"[{stamp}] {text}\n"
+            if translate:
+                try:
+                    t = translate(text, spoken)
+                    if t:
+                        line += f"[{stamp}] \u21b3 {translate.target}: {t}\n"
+                except Exception as e:
+                    print(f"{name}: translation failed: {e}", flush=True)
             with open(OUT, "a", encoding="utf-8") as o:
-                o.write(f"[{stamp}] {text}\n")
+                o.write(line)
             previous = text
         os.remove(f)
