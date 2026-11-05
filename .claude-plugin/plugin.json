@@ -1,0 +1,13 @@
+{
+  "name": "meeting-wingman",
+  "version": "0.1.0",
+  "description": "Live meeting coach for Claude Code: transcribes what your computer plays with faster-whisper and suggests short answers when a question comes up.",
+  "author": {
+    "name": "Cem Ayyildiz",
+    "url": "https://github.com/cem-ayyildiz"
+  },
+  "homepage": "https://github.com/cem-ayyildiz/meeting-wingman",
+  "repository": "https://github.com/cem-ayyildiz/meeting-wingman",
+  "license": "MIT",
+  "keywords": ["meeting", "transcription", "whisper", "coaching", "live", "interview"]
+}

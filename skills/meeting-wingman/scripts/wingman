@@ -1,0 +1,231 @@
+#!/usr/bin/env bash
+# meeting-wingman: live transcription of whatever the computer plays (the meeting app),
+# streamed into a Claude Code session.
+#
+#   wingman start [-l LANG] [-t "term, term"] [-T terms.txt] [--local | --remote HOST]
+#   wingman watch [N]          print new transcript lines (what Claude's Monitor runs);
+#                              N = old lines to show first
+#   wingman stop [OUT.txt]     stop everything, save the transcript to OUT.txt
+#   wingman level [SECONDS]    measure the capture level (is any audio reaching us?)
+#   wingman status
+#
+#   -l   language code: tr, en, de ... or "auto" (default: auto)
+#   -t   recognition hints: names, product names, acronyms (comma separated)
+#   -T   the same, from a file
+#
+# Configuration (environment, or ~/.config/meeting-wingman/config as KEY=value lines):
+#   WINGMAN_REMOTE_HOST    SSH host with a GPU; when set, transcription runs there
+#   WINGMAN_REMOTE_PYTHON  python with faster-whisper on that host  (default: python3)
+#   WINGMAN_REMOTE_DIR     working directory on that host            (default: .meeting-wingman)
+#   WINGMAN_PYTHON         local python with faster-whisper          (default: python3)
+#   WINGMAN_MODEL          faster-whisper model (default: large-v3 on GPU, small on CPU)
+#   WINGMAN_DEVICE         cuda | cpu | auto                         (default: auto)
+#   WINGMAN_CHUNK          seconds per chunk                         (default: 20)
+#   WINGMAN_AUDIO_SOURCE   capture source. Linux: a PulseAudio/PipeWire source
+#                          (default @DEFAULT_MONITOR@ = what the speakers play).
+#                          macOS: an avfoundation audio device (default "BlackHole 2ch")
+#   WINGMAN_MIC            optional second source mixed in (your microphone)
+#
+# Everything runs detached (setsid), so it survives the agent's background-task limits.
+set -u
+SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+DIR="$(dirname "$SELF")"
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/meeting-wingman/config"
+# shellcheck disable=SC1090
+[ -f "$CONF" ] && set -a && . "$CONF" && set +a
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/meeting-wingman"
+SEG="$STATE/chunks"
+LOCAL="$STATE/local"
+RHOST="${WINGMAN_REMOTE_HOST:-}"
+RPY="${WINGMAN_REMOTE_PYTHON:-python3}"
+RDIR="${WINGMAN_REMOTE_DIR:-.meeting-wingman}"
+LPY="${WINGMAN_PYTHON:-python3}"
+CHUNK="${WINGMAN_CHUNK:-20}"
+OS="$(uname -s)"
+mkdir -p "$STATE"
+
+die() { echo "ERROR: $*" >&2; exit 1; }
+# Prefix for detached jobs. Used directly (not via a function) so that $! is the real PID.
+DETACH=(nohup); command -v setsid >/dev/null && DETACH=(setsid nohup)
+mode() { cat "$STATE/mode" 2>/dev/null; }
+alive() { [ -f "$1" ] && kill -0 "$(cat "$1")" 2>/dev/null; }
+
+audio_input() {   # prints ffmpeg input arguments, one per line
+  if [ "$OS" = Darwin ]; then
+    printf '%s\n' -f avfoundation -i ":${WINGMAN_AUDIO_SOURCE:-BlackHole 2ch}"
+    [ -n "${WINGMAN_MIC:-}" ] && printf '%s\n' -f avfoundation -i ":$WINGMAN_MIC"
+  else
+    printf '%s\n' -f pulse -i "${WINGMAN_AUDIO_SOURCE:-@DEFAULT_MONITOR@}"
+    [ -n "${WINGMAN_MIC:-}" ] && printf '%s\n' -f pulse -i "$WINGMAN_MIC"
+  fi
+  [ -n "${WINGMAN_MIC:-}" ] && printf '%s\n' -filter_complex "amix=inputs=2:normalize=0"
+  true
+}
+
+wait_ready() {   # $1 = command that prints the server log. Fails fast when the server crashes.
+  local log
+  for _ in $(seq 1 100); do
+    log="$(eval "$1" 2>/dev/null)"
+    grep -q "model ready" <<<"$log" && return 0
+    grep -qE "^Traceback|Error" <<<"$log" && return 1
+    sleep 3
+  done
+  return 1
+}
+
+cmd_capture() {   # internal: started by `start`
+  mkdir -p "$SEG"
+  rm -f "$SEG"/*.wav   # a leftover chunk breaks "newest file = still being written"
+  mapfile -t IN < <(audio_input)
+  ffmpeg -nostdin -loglevel error "${IN[@]}" -ac 1 -ar 16000 \
+    -f segment -segment_time "$CHUNK" -strftime 1 "$SEG/%H%M%S.wav" &
+  FF=$!
+  trap 'kill $FF 2>/dev/null' EXIT INT TERM
+  if [ "$(mode)" = local ]; then wait $FF; exit; fi
+  while kill -0 $FF 2>/dev/null; do
+    # Order by name (= start time), not mtime: two chunks can share a modification second.
+    # The newest one is still being written; ship the rest.
+    mapfile -t f < <(ls "$SEG"/*.wav 2>/dev/null | sort)
+    n=${#f[@]}
+    if (( n > 1 )); then rsync -q --remove-source-files "${f[@]:0:n-1}" "$RHOST:$RDIR/in/" || true; fi
+    sleep 2
+  done
+}
+
+cmd_start() {
+  local lang="" terms="" force_local=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -l) lang="$2"; shift 2 ;;
+      -t) terms="$2"; shift 2 ;;
+      -T) terms="$(cat "$2")"; shift 2 ;;
+      --local) force_local=1; shift ;;
+      --remote) RHOST="$2"; shift 2 ;;
+      *) die "unknown option: $1 (see: wingman help)" ;;
+    esac
+  done
+  [ "$lang" = auto ] && lang=""
+  alive "$STATE/capture.pid" && die "already running (capture PID $(cat "$STATE/capture.pid")). Run: wingman stop"
+  command -v ffmpeg >/dev/null || die "ffmpeg not found"
+
+  local use_remote=0
+  if [ $force_local = 0 ] && [ -n "$RHOST" ]; then
+    if timeout 8 ssh -o BatchMode=yes "$RHOST" true 2>/dev/null; then
+      use_remote=1
+    else
+      echo "WARNING: cannot SSH to $RHOST without a prompt (key not loaded in the agent? try ssh-add)."
+      echo "         Falling back to local transcription. Once fixed: wingman stop && wingman start ..."
+    fi
+  fi
+
+  if [ $use_remote = 1 ]; then
+    command -v rsync >/dev/null || die "rsync not found"
+    ssh "$RHOST" "mkdir -p $RDIR/in"
+    scp -q "$DIR/transcribe_server.py" "$RHOST:$RDIR/transcribe_server.py"
+    printf '%s' "$terms" | ssh "$RHOST" "cat > $RDIR/terms.txt"
+    # Stop an old server by its PID file. Never `pkill -f` over ssh: the remote shell's own
+    # command line matches the pattern and the shell kills itself.
+    ssh "$RHOST" "cd $RDIR && [ -f server.pid ] && kill \$(cat server.pid) 2>/dev/null; rm -f server.pid in/*.wav; [ -s transcript.txt ] && mv transcript.txt transcript-\$(date +%Y%m%d-%H%M%S).txt; : > transcript.txt"
+    sleep 1
+    # "cd X && cmd &" would background the whole list in a subshell and $! would be that subshell.
+    timeout 20 ssh -n -f "$RHOST" "cd $RDIR || exit 1; WINGMAN_DIR=. WINGMAN_LANG='$lang' WINGMAN_MODEL='${WINGMAN_MODEL:-}' WINGMAN_DEVICE='${WINGMAN_DEVICE:-auto}' setsid nohup $RPY transcribe_server.py > server.log 2>&1 < /dev/null & echo \$! > server.pid"
+    echo "Loading model on $RHOST (first run downloads it)..."
+    if wait_ready "ssh $RHOST 'cat $RDIR/server.log'"; then
+      ssh "$RHOST" "head -1 $RDIR/server.log"
+      echo remote > "$STATE/mode"
+      echo "$RHOST" > "$STATE/host"
+    else
+      ssh "$RHOST" "tail -3 $RDIR/server.log; cd $RDIR && [ -f server.pid ] && kill \$(cat server.pid) 2>/dev/null; rm -f server.pid" >&2
+      echo "WARNING: the server on $RHOST did not start (GPU busy or out of memory?)."
+      echo "         Falling back to local transcription. Once fixed: wingman stop && wingman start ..."
+      use_remote=0
+    fi
+  fi
+
+  if [ $use_remote = 0 ]; then
+    # WINGMAN_MODEL is meant for the remote GPU when one is configured; locally pick by device.
+    local lmodel="${WINGMAN_MODEL:-}"; [ -n "$RHOST" ] && lmodel=""
+    "$LPY" -c "import faster_whisper" 2>/dev/null || die "faster-whisper is not installed for $LPY (pip install faster-whisper)"
+    mkdir -p "$LOCAL" "$SEG"
+    printf '%s' "$terms" > "$LOCAL/terms.txt"
+    [ -s "$LOCAL/transcript.txt" ] && mv "$LOCAL/transcript.txt" "$LOCAL/transcript-$(date +%Y%m%d-%H%M%S).txt"
+    : > "$LOCAL/transcript.txt"
+    WINGMAN_DIR="$LOCAL" WINGMAN_IN="$SEG" WINGMAN_SKIP_LAST=1 WINGMAN_LANG="$lang" WINGMAN_MODEL="$lmodel" \
+      "${DETACH[@]}" "$LPY" "$DIR/transcribe_server.py" > "$LOCAL/server.log" 2>&1 < /dev/null &
+    echo $! > "$STATE/server.pid"
+    echo "Loading model locally (first run downloads it)..."
+    wait_ready "cat '$LOCAL/server.log'" || { tail -20 "$LOCAL/server.log" >&2; die "local server did not become ready"; }
+    head -1 "$LOCAL/server.log"
+    echo local > "$STATE/mode"
+  fi
+
+  WINGMAN_REMOTE_HOST="$RHOST" "${DETACH[@]}" "$SELF" _capture > "$STATE/capture.log" 2>&1 < /dev/null &
+  echo $! > "$STATE/capture.pid"
+  sleep 3
+  alive "$STATE/capture.pid" || { cat "$STATE/capture.log" >&2; die "audio capture did not start"; }
+  echo "READY: mode $(mode), language ${lang:-auto}. Lines arrive about $((CHUNK + 5)) s after speech."
+  echo "Watch: wingman watch    Stop: wingman stop <out.txt>"
+}
+
+cmd_watch() {
+  local n="${1:-0}"
+  if [ "$(mode)" = local ]; then exec tail -n "$n" -F "$LOCAL/transcript.txt"; fi
+  local host; host="$(cat "$STATE/host" 2>/dev/null || echo "$RHOST")"
+  [ -n "$host" ] || die "not running (no mode recorded). Run: wingman start"
+  while true; do   # reconnect on drop
+    ssh -o BatchMode=yes -o ServerAliveInterval=15 "$host" "touch $RDIR/transcript.txt; tail -n $n -F $RDIR/transcript.txt" 2>/dev/null
+    n=0
+    sleep 5
+  done
+}
+
+cmd_stop() {
+  local out="${1:-$STATE/transcript-$(date +%Y%m%d-%H%M%S).txt}" m host
+  m="$(mode)"; host="$(cat "$STATE/host" 2>/dev/null || echo "$RHOST")"
+  [ -n "$m" ] || die "not running"
+  if [ -f "$STATE/capture.pid" ]; then
+    local p; p=$(cat "$STATE/capture.pid")
+    kill -TERM -- "-$p" 2>/dev/null || kill "$p" 2>/dev/null   # process group: ffmpeg + rsync
+    rm -f "$STATE/capture.pid"
+    sleep 4   # let the last shipped chunk be transcribed
+  fi
+  mkdir -p "$(dirname "$out")"
+  if [ "$m" = local ]; then
+    cp "$LOCAL/transcript.txt" "$out"
+    alive "$STATE/server.pid" && kill "$(cat "$STATE/server.pid")"
+    rm -f "$STATE/server.pid"
+  else
+    ssh "$host" "cat $RDIR/transcript.txt" > "$out"
+    ssh "$host" "cd $RDIR && [ -f server.pid ] && kill \$(cat server.pid) 2>/dev/null; rm -f server.pid; [ -s transcript.txt ] && mv transcript.txt transcript-\$(date +%Y%m%d-%H%M%S).txt; true"
+  fi
+  rm -f "$STATE/mode" "$STATE/host"
+  local n; n=$(wc -l < "$out")
+  echo "Transcript: $out ($n lines${n:+, $(head -c 10 "$out") to $(tail -1 "$out" | head -c 10)})"
+}
+
+cmd_level() {
+  local s="${1:-4}" tmp; tmp="$(mktemp -d)/level.wav"
+  mapfile -t IN < <(audio_input)
+  ffmpeg -nostdin -loglevel error -y "${IN[@]}" -t "$s" -ac 1 -ar 16000 "$tmp" || die "capture failed"
+  ffmpeg -nostdin -hide_banner -i "$tmp" -af volumedetect -f null - 2>&1 | grep -E "mean_volume|max_volume"
+  rm -rf "$(dirname "$tmp")"
+  echo "Around -60 dB or lower = nothing is playing (computer not in the meeting, app muted, wrong output device)."
+}
+
+cmd_status() {
+  echo "mode:    $(mode || true)"
+  echo "capture: $(alive "$STATE/capture.pid" && echo running || echo stopped)"
+  [ "$(mode)" = local ] && echo "server:  $(alive "$STATE/server.pid" && echo running || echo stopped)"
+  [ "$(mode)" = remote ] && echo "host:    $(cat "$STATE/host")"
+  true
+}
+
+case "${1:-help}" in
+  start) shift; cmd_start "$@" ;;
+  watch) shift; cmd_watch "$@" ;;
+  stop) shift; cmd_stop "$@" ;;
+  level) shift; cmd_level "$@" ;;
+  status) cmd_status ;;
+  _capture) cmd_capture ;;
+  *) sed -n '2,29p' "$SELF" | sed 's/^# \{0,1\}//' ;;
+esac
