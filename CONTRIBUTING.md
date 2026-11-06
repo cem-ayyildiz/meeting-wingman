@@ -1,7 +1,8 @@
 # Contributing
 
 Thanks for helping. Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md);
-security problems go through [SECURITY.md](SECURITY.md), not public issues.
+security problems go through [SECURITY.md](SECURITY.md), not public issues; accessibility
+barriers are welcome as issues (see [ACCESSIBILITY.md](ACCESSIBILITY.md)).
 
 The most useful contributions right now:
 
