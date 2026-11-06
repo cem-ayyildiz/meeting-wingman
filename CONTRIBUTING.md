@@ -1,6 +1,9 @@
 # Contributing
 
-Thanks for helping. The most useful contributions right now:
+Thanks for helping. Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md);
+security problems go through [SECURITY.md](SECURITY.md), not public issues.
+
+The most useful contributions right now:
 
 - **macOS testing.** Capture through BlackHole is written but has not been tested much.
 - **Windows capture** (WASAPI loopback through ffmpeg `dshow`, or another approach).
