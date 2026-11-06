@@ -135,10 +135,12 @@ Two sources, pick per meeting:
 ### What "Allow remote debugging" grants
 
 > [!WARNING]
-> The browser's permission is not limited to captions. When you click **Allow**, the connection
-> can control the **whole browser**: every open tab, the pages you are signed in to and their
-> content. meeting-wingman uses it only to list the open tabs (address and title) and to read the
-> caption text of the meeting tab, and its code is short enough to check
+> Captions are optional. If you do not allow remote debugging, use the audio source: it works
+> with every meeting app, only without speaker names. If you do allow it, know that the
+> permission is not limited to captions. When you click **Allow**, the connection can control
+> the **whole browser**: every open tab, the pages you are signed in to and their content.
+> meeting-wingman uses it only to list the open tabs (address and title) and to read the caption
+> text of the meeting tab, and its code is short enough to check
 > ([`captions.py`](skills/meeting-wingman/scripts/captions.py), [`cdp.py`](skills/meeting-wingman/scripts/cdp.py)).
 > But the grant itself is wider than that, and while remote debugging is on, any program on your
 > computer can ask for the same access (the browser asks you again for each new connection).
@@ -195,6 +197,24 @@ A sentence takes about 0.3–0.4 s on a laptop CPU. The model is downloaded on f
    (questions, your name, numbers in coach mode; commitments, decisions, blockers, dates in team
    mode), with the quiet lines before it as context, and a digest of the rest every few minutes.
 4. Claude replies: answer cards in coach mode, tasks and comments in team mode.
+
+### What runs where
+
+<p align="center">
+  <img src="docs/assets/architecture.svg" width="900" alt="Architecture. On your computer: captions from the browser tab (optional, needs the browser's permission), or audio (the default) transcribed by faster-whisper, go into one transcript; a filter wakes Claude Code, which shows you answers and tasks. Outside your computer, only if you use them: models from the Hugging Face Hub once, your own SSH GPU host, the model provider through your Claude Code session, and your task tracker after you confirm.">
+</p>
+
+| Part | Where it runs | What crosses the network |
+|---|---|---|
+| Caption reader (`captions.py`, `cdp.py`), **optional** | Your computer, talking to your browser on `127.0.0.1`. Runs only with `--captions` and only after you allow remote debugging in the browser; without that, use the audio source | Nothing |
+| Recorder and segmenter (`ffmpeg` or `pw-record`, `segmenter.py`) | Your computer | Nothing |
+| Transcriber and translator (`transcribe_server.py`, `translate.py`) | Your computer, or the SSH host you configure | Models from the Hugging Face Hub, once. In remote mode, audio chunks to your host and lines back |
+| Filter (`gate.py`, `wingman watch`) | Your computer | Nothing |
+| Claude Code | Your computer | The lines the filter passes, like any text in your session |
+| Your tracker | Its own service | Tasks and comments in team mode, after you confirm (or with `auto`) |
+
+Everything inside the box is started and stopped by the `wingman` command; there is no daemon,
+no service and nothing left running after `wingman stop`.
 
 **Recommended setup:** run Claude Code in **VS Code** (or another editor with the Claude Code
 panel) beside the meeting window, so the cards are next to the call. Join from the computer as you

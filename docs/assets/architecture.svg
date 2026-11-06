@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="440" viewBox="0 0 960 440" role="img" aria-label="Architecture. On your computer: captions from the browser tab, or audio transcribed by faster-whisper, go into one transcript; a filter wakes Claude Code, which shows you answers and tasks. Outside your computer, only if you use them: models from the Hugging Face Hub once, your own SSH GPU host, the model provider through your Claude Code session, and your task tracker after you confirm.">
+  <style>
+    .t { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, "DejaVu Sans", sans-serif; }
+    .n { font-size: 15px; font-weight: 700; fill: #1f2328; }
+    .s { font-size: 12.5px; fill: #59636e; }
+    .a { font-size: 12px; fill: #59636e; letter-spacing: 0.04em; }
+    .box { fill: #ffffff; stroke: #d1d9e0; }
+    .ext { fill: #ffffff; stroke: #f0883e; }
+    .loc { fill: none; stroke: #8c959f; stroke-width: 1.5; }
+    .net { fill: none; stroke: #f0883e; stroke-width: 1.5; }
+    .dash { stroke-dasharray: 5 4; }
+  </style>
+  <defs>
+    <marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8c959f"/>
+    </marker>
+    <marker id="o" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#f0883e"/>
+    </marker>
+  </defs>
+  <rect x="0.5" y="0.5" width="959" height="439" rx="14" fill="#f6f8fa" stroke="#d1d9e0"/>
+
+  <g class="t">
+    <!-- your computer -->
+    <rect x="24" y="24" width="912" height="190" rx="12" fill="#ffffff" fill-opacity="0.6" stroke="#8c959f"/>
+    <text x="44" y="50" class="a">YOUR COMPUTER</text>
+
+    <rect x="44" y="68" width="160" height="56" rx="10" class="box" stroke-dasharray="5 4"/>
+    <text x="124" y="92" text-anchor="middle" class="n">Captions</text>
+    <text x="124" y="111" text-anchor="middle" class="s">optional · browser OK</text>
+
+    <rect x="44" y="140" width="160" height="56" rx="10" class="box"/>
+    <text x="124" y="164" text-anchor="middle" class="n">Audio</text>
+    <text x="124" y="183" text-anchor="middle" class="s">default · faster-whisper</text>
+
+    <rect x="244" y="104" width="140" height="56" rx="10" class="box"/>
+    <text x="314" y="128" text-anchor="middle" class="n">Transcript</text>
+    <text x="314" y="147" text-anchor="middle" class="s">one text file</text>
+
+    <rect x="424" y="104" width="140" height="56" rx="10" class="box"/>
+    <text x="494" y="128" text-anchor="middle" class="n">Filter</text>
+    <text x="494" y="147" text-anchor="middle" class="s">only what matters</text>
+
+    <rect x="604" y="104" width="150" height="56" rx="10" fill="#fff4e8" stroke="#f0883e"/>
+    <text x="679" y="128" text-anchor="middle" class="n">Claude Code</text>
+    <text x="679" y="147" text-anchor="middle" class="s">answers · tasks</text>
+
+    <rect x="794" y="104" width="122" height="56" rx="10" class="box"/>
+    <text x="855" y="128" text-anchor="middle" class="n">You</text>
+    <text x="855" y="147" text-anchor="middle" class="s">beside the call</text>
+
+    <path d="M204,96 C 226,96 224,124 240,126" class="loc dash" marker-end="url(#g)"/>
+    <path d="M204,168 C 226,168 224,140 240,138" class="loc" marker-end="url(#g)"/>
+    <line x1="384" y1="132" x2="420" y2="132" class="loc" marker-end="url(#g)"/>
+    <line x1="564" y1="132" x2="600" y2="132" class="loc" marker-end="url(#g)"/>
+    <line x1="754" y1="132" x2="790" y2="132" class="loc" marker-end="url(#g)"/>
+
+    <!-- outside -->
+    <rect x="24" y="244" width="912" height="108" rx="12" fill="none" stroke="#f0883e" stroke-dasharray="6 5"/>
+    <text x="464" y="294" text-anchor="middle" class="a">OUTSIDE</text>
+    <text x="464" y="312" text-anchor="middle" class="a">YOUR COMPUTER</text>
+
+    <rect x="44" y="270" width="160" height="56" rx="10" class="ext"/>
+    <text x="124" y="294" text-anchor="middle" class="n">Hugging Face</text>
+    <text x="124" y="313" text-anchor="middle" class="s">models, once</text>
+
+    <rect x="224" y="270" width="160" height="56" rx="10" class="ext"/>
+    <text x="304" y="294" text-anchor="middle" class="n">Your GPU host</text>
+    <text x="304" y="313" text-anchor="middle" class="s">optional, over SSH</text>
+
+    <rect x="544" y="270" width="160" height="56" rx="10" class="ext"/>
+    <text x="624" y="294" text-anchor="middle" class="n">Model provider</text>
+    <text x="624" y="313" text-anchor="middle" class="s">your Claude account</text>
+
+    <rect x="744" y="270" width="172" height="56" rx="10" class="ext"/>
+    <text x="830" y="294" text-anchor="middle" class="n">Your task tracker</text>
+    <text x="830" y="313" text-anchor="middle" class="s">team mode, you confirm</text>
+
+    <line x1="124" y1="270" x2="124" y2="200" class="net dash" marker-end="url(#o)"/>
+    <path d="M304,270 C 304,236 214,228 190,200" class="net dash" marker-start="url(#o)" marker-end="url(#o)"/>
+    <path d="M660,160 C 660,220 628,230 626,266" class="net" marker-end="url(#o)"/>
+    <path d="M710,160 C 720,220 820,226 826,266" class="net dash" marker-end="url(#o)"/>
+
+    <!-- legend -->
+    <line x1="24" y1="386" x2="60" y2="386" class="loc" marker-end="url(#g)"/>
+    <text x="68" y="390" class="s">stays on your computer</text>
+    <line x1="232" y1="386" x2="268" y2="386" class="net" marker-end="url(#o)"/>
+    <text x="276" y="390" class="s">crosses the network</text>
+    <line x1="424" y1="386" x2="460" y2="386" class="net dash" marker-end="url(#o)"/>
+    <text x="468" y="390" class="s">network, only if you use it</text>
+    <line x1="660" y1="386" x2="696" y2="386" class="loc dash" marker-end="url(#g)"/>
+    <text x="704" y="390" class="s">optional, local</text>
+    <text x="24" y="418" class="s">Captions are optional: they need the browser's "Allow remote debugging", which covers the whole browser. Without it, use Audio.</text>
+  </g>
+</svg>

@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.4] - 2026-11-06
+
+Architecture diagram. No code changes.
+
+- README: new "What runs where" section with an architecture diagram
+  (`docs/assets/architecture.svg`) and a table of what runs on your computer and what crosses the
+  network.
+- Captions are marked optional everywhere: without the browser's remote-debugging permission, the
+  audio source does the job, only without speaker names.
+
 ## [0.3.3] - 2026-11-06
 
 Clearer disclosures for the directory review. No code changes.
