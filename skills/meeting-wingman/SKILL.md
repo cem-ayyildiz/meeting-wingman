@@ -43,9 +43,14 @@ There are two modes. Ask which one, or infer it from the request; both can run a
    - **Captions source**: the meeting must be open in the browser (not the desktop app) with
      captions turned on (CC), in the meeting's language. Remote debugging must be on once:
      `chrome://inspect/#remote-debugging` (or `edge://inspect`). When `wingman start --captions`
-     connects, the browser asks "Allow remote debugging?": tell the user to click Allow. If the
-     user prefers a separate browser, `--cdp <port>` with a browser started with
-     `--remote-debugging-port=<port>`.
+     connects, the browser asks "Allow remote debugging?". Before the user clicks Allow, tell
+     them in one or two sentences that this grant covers the whole browser (all tabs and
+     signed-in pages), not only captions; that wingman reads only the tab list and the caption
+     text; and that they can switch remote debugging off at the same page after the meeting.
+     Offer the safer option: a separate browser with its own profile, started with
+     `--user-data-dir=<dir> --remote-debugging-port=<port>`, and `--cdp <port>`; or the audio
+     source. After `wingman stop` of a captions meeting, remind them they can switch remote
+     debugging off again.
    - Pick captions when the meeting runs in the browser and speaker names help (team mode); pick
      audio for desktop apps, or when captions are not available in the meeting's language.
 3. **Languages.** The meeting language (`-l tr`, `-l en` ..., or `-l auto` for a mixed meeting).

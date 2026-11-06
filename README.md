@@ -128,9 +128,28 @@ Two sources, pick per meeting:
 |---|---|---|
 | Works with | Meet, Teams and Zoom **in the browser** (Chrome, Edge, Chromium), captions turned on | Any app that makes sound: Meet, Teams, Zoom desktop or browser, Webex, Slack huddles, Discord |
 | Speaker names | Yes, from the meeting | No |
-| Needs | Remote debugging on once (`chrome://inspect/#remote-debugging`); the browser asks you to allow it | `ffmpeg` and faster-whisper; a GPU helps |
+| Needs | Remote debugging on (`chrome://inspect/#remote-debugging`); the browser asks you to allow it. See [the note below](#what-allow-remote-debugging-grants) | `ffmpeg` and faster-whisper; a GPU helps |
 | Latency | About 2 s after a caption settles | 1–3 s after the speaker pauses |
 | Languages | Those the platform captions | Whisper's ~100 |
+
+### What "Allow remote debugging" grants
+
+> [!WARNING]
+> The browser's permission is not limited to captions. When you click **Allow**, the connection
+> can control the **whole browser**: every open tab, the pages you are signed in to and their
+> content. meeting-wingman uses it only to list the open tabs (address and title) and to read the
+> caption text of the meeting tab, and its code is short enough to check
+> ([`captions.py`](skills/meeting-wingman/scripts/captions.py), [`cdp.py`](skills/meeting-wingman/scripts/cdp.py)).
+> But the grant itself is wider than that, and while remote debugging is on, any program on your
+> computer can ask for the same access (the browser asks you again for each new connection).
+>
+> - **Turn it off after the meeting:** open `chrome://inspect/#remote-debugging` (or `edge://inspect`)
+>   and switch remote debugging off. Turn it on again before the next captions meeting.
+> - **Safer: a separate browser.** Start a browser with its own profile,
+>   `google-chrome --user-data-dir=$HOME/.config/wingman-chrome --remote-debugging-port=9222`, join
+>   the meeting there and use `wingman start --captions --cdp 9222`. The connection then reaches
+>   only that profile, not your main browser with its sign-ins.
+> - **Or use the audio source**, which does not touch the browser at all.
 
 Captions are best for team meetings, where it matters who said "I'll take it". Audio works
 everywhere, including the desktop apps. Nothing is installed in the meeting and no bot joins it.
@@ -311,11 +330,15 @@ State lives in `~/.local/state/meeting-wingman/`.
 ## What it runs, sends and fetches
 
 Everything the plugin does is in readable bash and Python in
-[`skills/meeting-wingman/scripts/`](skills/meeting-wingman/scripts/):
+[`skills/meeting-wingman/scripts/`](skills/meeting-wingman/scripts/). The only executable outside
+that folder is [`bin/wingman`](bin/wingman), a four-line wrapper that puts `wingman` on the PATH
+inside Claude Code and runs `skills/meeting-wingman/scripts/wingman` with the same arguments; it
+does nothing else.
 
 | | |
 |---|---|
-| **Runs** | `ffmpeg` (or, with `--app`, PipeWire's `pw-record` and `pw-link`) to record the system audio and microphone, `python3` with faster-whisper (and CTranslate2 for translation) to transcribe, `rsync` and `ssh` only in remote mode. With `--captions`: a DevTools connection to your own browser on `127.0.0.1`, which lists the open tabs to find the meeting and then reads only the caption text of that tab |
+| **Executables shipped** | [`bin/wingman`](bin/wingman) (the wrapper above), [`scripts/wingman`](skills/meeting-wingman/scripts/wingman) (bash, the command itself) and [`scripts/transcribe_server.py`](skills/meeting-wingman/scripts/transcribe_server.py) (Python, the transcriber). The other `.py` files are run with `python3`. Nothing is compiled or installed, and no downloaded code is run. Only in remote mode, `transcribe_server.py` and `translate.py` are copied (`scp`) to `~/.meeting-wingman` on the SSH host you configure and run there with its Python |
+| **Runs** | `ffmpeg` (or, with `--app`, PipeWire's `pw-record` and `pw-link`) to record the system audio and microphone, `python3` with faster-whisper (and CTranslate2 for translation) to transcribe, `rsync` and `ssh` only in remote mode. With `--captions`: a DevTools connection to your own browser on `127.0.0.1`, which lists the open tabs to find the meeting and then reads only the caption text of that tab. The browser's permission for that connection covers the whole browser ([what it grants](#what-allow-remote-debugging-grants)) |
 | **Sends** | Audio chunks only to the SSH host you configure in `WINGMAN_REMOTE_HOST`, and only if you configure one. Tasks and comments only to the tracker you connected yourself, in team mode, with your confirmation unless you chose `auto`. Transcript lines are read by Claude Code like any other text in your session |
 | **Fetches** | The faster-whisper speech model and, with `-x`, the NLLB-200 translation model, from the Hugging Face Hub on first use |
 | **Keeps** | Audio chunks for a few seconds, until they are transcribed. The transcript only at the path you give `wingman stop`; no copy is left in the state folder or on the remote host |

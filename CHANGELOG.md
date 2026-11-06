@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.3] - 2026-11-06
+
+Clearer disclosures for the directory review. No code changes.
+
+- README, PRIVACY and the skill now say what the browser's "Allow remote debugging" permission
+  grants: control of the whole browser, not only the captions the plugin reads. They explain how to
+  switch it off after the meeting and recommend a separate browser profile with `--cdp <port>`
+  (or the audio source). The skill tells the user this before they click Allow.
+- README lists the executables the plugin ships (`bin/wingman`, a four-line wrapper;
+  `scripts/wingman`; `scripts/transcribe_server.py`) and what remote mode copies to the SSH host.
+- PRIVACY mentions the 16-pixel screencast that keeps a background meeting tab rendering; its frames
+  are discarded unsaved.
+
 ## [0.3.2] - 2026-11-05
 
 Clean-ups from the Claude directory's validation.
